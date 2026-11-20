@@ -1,0 +1,122 @@
+/**
+ * GST Compliant PDF Tax Invoice Generator (using pdfkit)
+ */
+import PDFDocument from 'pdfkit';
+import type { Invoice } from '../types';
+
+function fmtInrPlain(amt: number): string {
+  const safe = Number.isFinite(amt) ? amt : 0;
+  return `INR ${safe.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+export async function generateInvoicePdfBuffer(
+  invoice: Invoice,
+  seller: { businessName: string; gstin?: string; address: string }
+): Promise<Buffer> {
+  return await new Promise<Buffer>((resolve, reject) => {
+    const doc = new PDFDocument({ margin: 45, size: 'A4' });
+    const chunks: Buffer[] = [];
+    doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    // Header
+    doc.fontSize(18).fillColor('#0B1C19').text(seller.businessName || 'FinSight Business Workspace', { continued: false });
+    doc.fontSize(9).fillColor('#4A5568');
+    if (seller.gstin) doc.text(`Seller GSTIN: ${seller.gstin}`);
+    if (seller.address) doc.text(seller.address);
+
+    doc.moveUp(2.5);
+    doc.fontSize(16).fillColor('#0B1C19').text('TAX INVOICE', { align: 'right' });
+    doc.fontSize(9).fillColor('#4A5568').text(`Invoice #: ${invoice.invoiceNumber}`, { align: 'right' });
+    doc.text(`Issue Date: ${invoice.invoiceDate}`, { align: 'right' });
+    doc.text(`Due Date: ${invoice.dueDate}`, { align: 'right' });
+    doc.text(`Status: ${invoice.status}`, { align: 'right' });
+
+    doc.moveDown(1.5);
+    doc.moveTo(45, doc.y).lineTo(550, doc.y).strokeColor('#CBD5E0').stroke();
+    doc.moveDown(1);
+
+    // Bill To
+    doc.fontSize(9).fillColor('#718096').text('BILLED TO');
+    doc.fontSize(11).fillColor('#0B1C19').text(invoice.clientName);
+    if (invoice.clientGstin) doc.fontSize(9).fillColor('#4A5568').text(`Buyer GSTIN: ${invoice.clientGstin}`);
+    doc.fontSize(9).fillColor('#4A5568').text(`Place of Supply: ${invoice.placeOfSupply}`);
+    doc.moveDown(1.2);
+
+    // Table Header
+    const tableTop = doc.y;
+    doc.rect(45, tableTop, 505, 22).fill('#102722');
+    doc.fillColor('#FFFFFF').fontSize(9);
+    doc.text('Description', 52, tableTop + 6, { width: 215 });
+    doc.text('Qty', 270, tableTop + 6, { width: 45, align: 'right' });
+    doc.text('Unit Rate', 320, tableTop + 6, { width: 85, align: 'right' });
+    doc.text('GST %', 410, tableTop + 6, { width: 45, align: 'right' });
+    doc.text('Amount', 460, tableTop + 6, { width: 82, align: 'right' });
+
+    let rowY = tableTop + 28;
+    doc.fillColor('#1A202C').fontSize(9);
+    for (const item of invoice.lineItems) {
+      doc.text(item.description, 52, rowY, { width: 215 });
+      doc.text(String(item.quantity), 270, rowY, { width: 45, align: 'right' });
+      doc.text(fmtInrPlain(item.unitPrice), 320, rowY, { width: 85, align: 'right' });
+      doc.text(`${item.taxRate}%`, 410, rowY, { width: 45, align: 'right' });
+      doc.text(fmtInrPlain(item.lineTotal), 460, rowY, { width: 82, align: 'right' });
+      rowY += 22;
+    }
+
+    doc.moveTo(45, rowY + 4).lineTo(550, rowY + 4).strokeColor('#CBD5E0').stroke();
+    rowY += 16;
+
+    // Totals block
+    const labelX = 330;
+    const valX = 445;
+    doc.fontSize(9).fillColor('#4A5568');
+    doc.text('Taxable Subtotal:', labelX, rowY, { width: 110, align: 'right' });
+    doc.text(fmtInrPlain(invoice.subtotal), valX, rowY, { width: 98, align: 'right' });
+    rowY += 16;
+
+    if (invoice.cgst > 0) {
+      doc.text('CGST:', labelX, rowY, { width: 110, align: 'right' });
+      doc.text(fmtInrPlain(invoice.cgst), valX, rowY, { width: 98, align: 'right' });
+      rowY += 16;
+    }
+    if (invoice.sgst > 0) {
+      doc.text('SGST:', labelX, rowY, { width: 110, align: 'right' });
+      doc.text(fmtInrPlain(invoice.sgst), valX, rowY, { width: 98, align: 'right' });
+      rowY += 16;
+    }
+    if (invoice.igst > 0) {
+      doc.text('IGST:', labelX, rowY, { width: 110, align: 'right' });
+      doc.text(fmtInrPlain(invoice.igst), valX, rowY, { width: 98, align: 'right' });
+      rowY += 16;
+    }
+
+    doc.fontSize(11).fillColor('#0B1C19');
+    doc.text('Grand Total:', labelX, rowY + 4, { width: 110, align: 'right' });
+    doc.text(fmtInrPlain(invoice.total), valX, rowY + 4, { width: 98, align: 'right' });
+    rowY += 24;
+
+    doc.fontSize(9).fillColor('#4A5568');
+    doc.text('Amount Paid:', labelX, rowY, { width: 110, align: 'right' });
+    doc.text(fmtInrPlain(invoice.amountPaid), valX, rowY, { width: 98, align: 'right' });
+    rowY += 16;
+    doc.text('Balance Due:', labelX, rowY, { width: 110, align: 'right' });
+    doc.text(fmtInrPlain(invoice.balanceDue), valX, rowY, { width: 98, align: 'right' });
+
+    if (invoice.notes) {
+      doc.moveDown(3);
+      doc.fontSize(8.5).fillColor('#4A5568').text(`Notes: ${invoice.notes}`, 45);
+    }
+
+    doc.moveDown(2);
+    doc.fontSize(8).fillColor('#718096').text(
+      'Generated by FinSight Small Business Finance. Verify GSTIN and HSN/SAC details prior to GST portal filing.',
+      45,
+      760,
+      { align: 'center', width: 505 }
+    );
+
+    doc.end();
+  });
+}

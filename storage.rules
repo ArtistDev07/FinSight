@@ -1,0 +1,37 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Default deny
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAllowedDocumentType() {
+      return request.resource.contentType.matches('application/pdf') ||
+             request.resource.contentType.matches('text/csv') ||
+             request.resource.contentType.matches('text/plain') ||
+             request.resource.contentType.matches('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') ||
+             request.resource.contentType.matches('image/png') ||
+             request.resource.contentType.matches('image/jpeg');
+    }
+
+    // Owner-isolated private document vault: tax documents, statements, business receipts, invoice PDFs
+    match /users/{userId}/{folder}/{fileName} {
+      allow read: if isOwner(userId) &&
+        (folder == 'tax' || folder == 'receipts' || folder == 'statements' || folder == 'invoices');
+      allow write: if isOwner(userId) &&
+        (folder == 'tax' || folder == 'receipts' || folder == 'statements' || folder == 'invoices') &&
+        request.resource.size <= 10 * 1024 * 1024 &&
+        isAllowedDocumentType();
+      allow delete: if isOwner(userId);
+    }
+  }
+}

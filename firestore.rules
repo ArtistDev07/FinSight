@@ -1,0 +1,281 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Core security helpers
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.admin == true ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (request.auth.token.email_verified == true && request.auth.token.email == 'yogesh.devhub@gmail.com')
+      );
+    }
+
+    function isOwnedCreate() {
+      return isSignedIn() &&
+        incoming().ownerId is string &&
+        incoming().ownerId == request.auth.uid;
+    }
+
+    function isOwnedExisting() {
+      return isSignedIn() && existing().ownerId == request.auth.uid;
+    }
+
+    function isOwnerImmutableUpdate() {
+      return isOwnedExisting() &&
+        incoming().ownerId is string &&
+        incoming().ownerId == existing().ownerId;
+    }
+
+    // Server-managed admin registry (never client-writable)
+    match /admins/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow write: if false;
+    }
+
+    // User profiles
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isValidId(userId) &&
+        isOwner(userId) &&
+        incoming().uid == request.auth.uid &&
+        incoming().role == 'USER';
+      allow update: if isValidId(userId) && (
+        isAdmin() ||
+        (
+          isOwner(userId) &&
+          incoming().uid == existing().uid &&
+          incoming().role == existing().role &&
+          !incoming().diff(existing()).affectedKeys().hasAny(['role', 'uid', 'accountStatus'])
+        )
+      );
+      allow delete: if isValidId(userId) && isAdmin();
+    }
+
+    // Standard owner-isolated collections
+    match /userPreferences/{docId} {
+      allow get, delete: if isValidId(docId) && isOwnedExisting();
+      allow list: if isOwnedExisting();
+      allow create: if isValidId(docId) && isOwnedCreate();
+      allow update: if isValidId(docId) && isOwnerImmutableUpdate();
+    }
+
+    match /financialAccounts/{docId} {
+      allow get, delete: if isValidId(docId) && isOwnedExisting();
+      allow list: if isOwnedExisting();
+      allow create: if isValidId(docId) && isOwnedCreate();
+      allow update: if isValidId(docId) && isOwnerImmutableUpdate();
+    }
+
+    match /transactions/{docId} {
+      allow get, delete: if isValidId(docId) && isOwnedExisting();
+      allow list: if isOwnedExisting();
+      allow create: if isValidId(docId) && isOwnedCreate();
+      allow update: if isValidId(docId) && isOwnerImmutableUpdate();
+    }
+
+    match /importJobs/{docId} {
+      allow get, delete: if isValidId(docId) && isOwnedExisting();
+      allow list: if isOwnedExisting();
+      allow create: if isValidId(docId) && isOwnedCreate();
+      allow update: if isValidId(docId) && isOwnerImmutableUpdate();
+    }
+
+    match /budgets/{docId} {
+      allow get, delete: if isValidId(docId) && isOwnedExisting();
+      allow list: if isOwnedExisting();
+      allow create: if isValidId(docId) && isOwnedCreate();
+      allow update: if isValidId(docId) && isOwnerImmutableUpdate();
+    }
+
+    match /portfolios/{docId} {
+      allow get, delete: if isValidId(docId) && isOwnedExisting();
+      allow list: if isOwnedExisting();
+      allow create: if isValidId(docId) && isOwnedCreate();
+      allow update: if isValidId(docId) && isOwnerImmutableUpdate();
+    }
+
+    match /holdings/{docId} {
+      allow get, delete: if isValidId(docId) && isOwnedExisting();
+      allow list: if isOwnedExisting();
+      allow create: if isValidId(docId) && isOwnedCreate();
+      allow update: if isValidId(docId) && isOwnerImmutableUpdate();
+    }
+
+    // Market data: public read, admin write
+    match /marketInstruments/{instrumentId} {
+      allow read: if true;
+      allow write: if isValidId(instrumentId) && isAdmin();
+    }
+
+    match /marketHistory/{historyId} {
+      allow read: if true;
+      allow write: if isValidId(historyId) && isAdmin();
+    }
+
+    match /watchlists/{docId} {
+      allow get, delete: if isValidId(docId) && isOwnedExisting();
+      allow list: if isOwnedExisting();
+      allow create: if isValidId(docId) && isOwnedCreate();
+      allow update: if isValidId(docId) && isOwnerImmutableUpdate();
+    }
+
+    match /backtests/{docId} {
+      allow get, delete: if isValidId(docId) && isOwnedExisting();
+      allow list: if isOwnedExisting();
+      allow create: if isValidId(docId) && isOwnedCreate();
+      allow update: if isValidId(docId) && isOwnerImmutableUpdate();
+    }
+
+    match /paperAccounts/{docId} {
+      allow get, delete: if isValidId(docId) && isOwnedExisting();
+      allow list: if isOwnedExisting();
+      allow create: if isValidId(docId) && isOwnedCreate();
+      allow update: if isValidId(docId) && isOwnerImmutableUpdate();
+    }
+
+    match /paperTrades/{docId} {
+      allow get, delete: if isValidId(docId) && isOwnedExisting();
+      allow list: if isOwnedExisting();
+      allow create: if isValidId(docId) && isOwnedCreate();
+      allow update: if isValidId(docId) && isOwnerImmutableUpdate();
+    }
+
+    // Tax data
+    match /taxProfiles/{docId} {
+      allow get, delete: if isValidId(docId) && isOwnedExisting();
+      allow list: if isOwnedExisting();
+      allow create: if isValidId(docId) && isOwnedCreate();
+      allow update: if isValidId(docId) && isOwnerImmutableUpdate();
+    }
+
+    match /taxDeductions/{docId} {
+      allow get, delete: if isValidId(docId) && isOwnedExisting();
+      allow list: if isOwnedExisting();
+      allow create: if isValidId(docId) && isOwnedCreate();
+      allow update: if isValidId(docId) && isOwnerImmutableUpdate();
+    }
+
+    match /taxCalculations/{docId} {
+      allow get, delete: if isValidId(docId) && isOwnedExisting();
+      allow list: if isOwnedExisting();
+      allow create: if isValidId(docId) && isOwnedCreate();
+      allow update: if isValidId(docId) && isOwnerImmutableUpdate();
+    }
+
+    match /taxDocuments/{docId} {
+      allow get, delete: if isValidId(docId) && isOwnedExisting();
+      allow list: if isOwnedExisting();
+      allow create: if isValidId(docId) && isOwnedCreate();
+      allow update: if isValidId(docId) && isOwnerImmutableUpdate();
+    }
+
+    match /taxRules/{ruleId} {
+      allow read: if isSignedIn();
+      allow write: if isValidId(ruleId) && isAdmin();
+    }
+
+    // Fraud detection
+    match /fraudAnalyses/{docId} {
+      allow get, delete: if isValidId(docId) && isOwnedExisting();
+      allow list: if isOwnedExisting();
+      allow create: if isValidId(docId) && isOwnedCreate();
+      allow update: if isValidId(docId) && isOwnerImmutableUpdate();
+    }
+
+    match /fraudReports/{docId} {
+      allow get, delete: if isValidId(docId) && isOwnedExisting();
+      allow list: if isOwnedExisting();
+      allow create: if isValidId(docId) && isOwnedCreate();
+      allow update: if isValidId(docId) && isOwnerImmutableUpdate();
+    }
+
+    // Business finance
+    match /businesses/{docId} {
+      allow get, delete: if isValidId(docId) && isOwnedExisting();
+      allow list: if isOwnedExisting();
+      allow create: if isValidId(docId) && isOwnedCreate();
+      allow update: if isValidId(docId) && isOwnerImmutableUpdate();
+    }
+
+    match /clients/{docId} {
+      allow get, delete: if isValidId(docId) && isOwnedExisting();
+      allow list: if isOwnedExisting();
+      allow create: if isValidId(docId) && isOwnedCreate();
+      allow update: if isValidId(docId) && isOwnerImmutableUpdate();
+    }
+
+    match /invoices/{docId} {
+      allow get, delete: if isValidId(docId) && isOwnedExisting();
+      allow list: if isOwnedExisting();
+      allow create: if isValidId(docId) && isOwnedCreate();
+      allow update: if isValidId(docId) && isOwnerImmutableUpdate();
+    }
+
+    match /businessExpenses/{docId} {
+      allow get, delete: if isValidId(docId) && isOwnedExisting();
+      allow list: if isOwnedExisting();
+      allow create: if isValidId(docId) && isOwnedCreate();
+      allow update: if isValidId(docId) && isOwnerImmutableUpdate();
+    }
+
+    match /cashFlowForecasts/{docId} {
+      allow get, delete: if isValidId(docId) && isOwnedExisting();
+      allow list: if isOwnedExisting();
+      allow create: if isValidId(docId) && isOwnedCreate();
+      allow update: if isValidId(docId) && isOwnerImmutableUpdate();
+    }
+
+    match /emiPlans/{docId} {
+      allow get, delete: if isValidId(docId) && isOwnedExisting();
+      allow list: if isOwnedExisting();
+      allow create: if isValidId(docId) && isOwnedCreate();
+      allow update: if isValidId(docId) && isOwnerImmutableUpdate();
+    }
+
+    // AI conversations, notifications & audit logs
+    match /aiConversations/{docId} {
+      allow get, delete: if isValidId(docId) && isOwnedExisting();
+      allow list: if isOwnedExisting();
+      allow create: if isValidId(docId) && isOwnedCreate();
+      allow update: if isValidId(docId) && isOwnerImmutableUpdate();
+    }
+
+    match /notifications/{docId} {
+      allow get, delete: if isValidId(docId) && isOwnedExisting();
+      allow list: if isOwnedExisting();
+      allow create: if isValidId(docId) && isOwnedCreate();
+      allow update: if isValidId(docId) && isOwnerImmutableUpdate();
+    }
+
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+  }
+}

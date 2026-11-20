@@ -1,0 +1,6 @@
+{
+  "name": "FinSight - AI for Finance",
+  "description": "Unified AI-powered financial intelligence platform for India: Smart Budgeting, Investment Guide, NSE Historical Markets & Paper Trading, Tax Helper, Scam & Fraud Detector, and Small Business Finance.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

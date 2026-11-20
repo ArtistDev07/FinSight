@@ -1,0 +1,339 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated FinSight user profile with server-controlled role",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "fullName": { "type": "string", "maxLength": 120 },
+        "email": { "type": "string", "maxLength": 200 },
+        "role": { "type": "string", "enum": ["USER", "ADMIN"] },
+        "accountStatus": { "type": "string", "enum": ["ACTIVE", "SUSPENDED"] },
+        "onboardingCompleted": { "type": "boolean" },
+        "country": { "type": "string", "maxLength": 80 },
+        "currency": { "type": "string", "maxLength": 10 }
+      },
+      "required": ["uid", "email", "role", "accountStatus"]
+    },
+    "UserPreferences": {
+      "title": "UserPreferences",
+      "description": "User financial localization, AI explanation depth, and alert settings",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "financialYear": { "type": "string" },
+        "currency": { "type": "string" },
+        "language": { "type": "string" },
+        "numberFormat": { "type": "string", "enum": ["INDIAN", "INTERNATIONAL"] }
+      },
+      "required": ["id", "ownerId", "financialYear", "currency"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "User-owned income or expense transaction",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "description": { "type": "string", "maxLength": 300 },
+        "merchant": { "type": "string", "maxLength": 200 },
+        "amount": { "type": "number" },
+        "type": { "type": "string", "enum": ["INCOME", "EXPENSE"] },
+        "category": { "type": "string", "maxLength": 80 },
+        "source": { "type": "string", "enum": ["MANUAL", "CSV", "XLSX", "PDF", "SMS", "STATEMENT"] }
+      },
+      "required": ["id", "ownerId", "description", "amount", "type", "category"]
+    },
+    "ImportJobRecord": {
+      "title": "ImportJobRecord",
+      "description": "Statement import batch job audit record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "fileName": { "type": "string" },
+        "format": { "type": "string", "enum": ["CSV", "XLSX", "PDF", "TXT", "SMS"] },
+        "importedCount": { "type": "number" }
+      },
+      "required": ["id", "ownerId", "fileName", "format"]
+    },
+    "Budget": {
+      "title": "Budget",
+      "description": "User-owned monthly category budget",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "allocatedAmount": { "type": "number" }
+      },
+      "required": ["id", "ownerId", "category", "allocatedAmount"]
+    },
+    "Portfolio": {
+      "title": "Portfolio",
+      "description": "User-owned investment portfolio container",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "name": { "type": "string" }
+      },
+      "required": ["id", "ownerId", "name"]
+    },
+    "Holding": {
+      "title": "Holding",
+      "description": "User-owned investment portfolio holding",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "instrumentSymbol": { "type": "string", "maxLength": 40 },
+        "assetType": { "type": "string", "maxLength": 60 },
+        "quantity": { "type": "number" },
+        "purchasePrice": { "type": "number" }
+      },
+      "required": ["id", "ownerId", "instrumentSymbol", "assetType", "quantity", "purchasePrice"]
+    },
+    "WatchlistItem": {
+      "title": "WatchlistItem",
+      "description": "User-owned market instrument watchlist item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "symbol": { "type": "string" }
+      },
+      "required": ["id", "ownerId", "symbol"]
+    },
+    "BacktestRecord": {
+      "title": "BacktestRecord",
+      "description": "Strategy backtest execution against historical NSE OHLCV archive",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "symbol": { "type": "string" },
+        "totalReturnPct": { "type": "number" }
+      },
+      "required": ["id", "ownerId", "symbol"]
+    },
+    "PaperTrade": {
+      "title": "PaperTrade",
+      "description": "Simulated paper trading order record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "symbol": { "type": "string" },
+        "action": { "type": "string", "enum": ["BUY", "SELL"] },
+        "quantity": { "type": "number" }
+      },
+      "required": ["id", "ownerId", "symbol", "action", "quantity"]
+    },
+    "TaxProfile": {
+      "title": "TaxProfile",
+      "description": "User Indian income tax baseline profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "financialYear": { "type": "string" },
+        "annualSalary": { "type": "number" }
+      },
+      "required": ["id", "ownerId", "financialYear"]
+    },
+    "TaxDeduction": {
+      "title": "TaxDeduction",
+      "description": "Chapter VI-A tax deduction claim",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "category": { "type": "string" },
+        "claimedAmount": { "type": "number" }
+      },
+      "required": ["id", "ownerId", "category", "claimedAmount"]
+    },
+    "TaxDocument": {
+      "title": "TaxDocument",
+      "description": "Tax vault file metadata record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "name": { "type": "string" },
+        "storageKey": { "type": "string" }
+      },
+      "required": ["id", "ownerId", "name", "storageKey"]
+    },
+    "FraudAnalysis": {
+      "title": "FraudAnalysis",
+      "description": "Gemini AI scam and phishing analysis record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "riskScore": { "type": "number" },
+        "riskLevel": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"] }
+      },
+      "required": ["id", "ownerId", "riskScore", "riskLevel"]
+    },
+    "Client": {
+      "title": "Client",
+      "description": "Small business client directory entry with GSTIN",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "companyName": { "type": "string" }
+      },
+      "required": ["id", "ownerId", "companyName"]
+    },
+    "Invoice": {
+      "title": "Invoice",
+      "description": "User-owned small business GST invoice",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "invoiceNumber": { "type": "string", "maxLength": 60 },
+        "total": { "type": "number" },
+        "status": { "type": "string", "enum": ["DRAFT", "UNPAID", "PARTIALLY_PAID", "PAID", "OVERDUE"] }
+      },
+      "required": ["id", "ownerId", "invoiceNumber", "total", "status"]
+    },
+    "BusinessExpense": {
+      "title": "BusinessExpense",
+      "description": "Deductible small business expense record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "name": { "type": "string" },
+        "amount": { "type": "number" }
+      },
+      "required": ["id", "ownerId", "name", "amount"]
+    },
+    "EMIPlan": {
+      "title": "EMIPlan",
+      "description": "Saved business loan EMI scenario",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "planName": { "type": "string" },
+        "monthlyEMI": { "type": "number" }
+      },
+      "required": ["id", "ownerId", "planName", "monthlyEMI"]
+    },
+    "AIConversationMessage": {
+      "title": "AIConversationMessage",
+      "description": "Persisted FinSight Gemini AI chat turn",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "assistant"] },
+        "text": { "type": "string" }
+      },
+      "required": ["id", "ownerId", "role", "text"]
+    },
+    "AppNotification": {
+      "title": "AppNotification",
+      "description": "User alert notification",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "title": { "type": "string" },
+        "read": { "type": "boolean" }
+      },
+      "required": ["id", "ownerId", "title", "read"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User profile documents isolated per authenticated UID"
+    },
+    "/userPreferences/{docId}": {
+      "schema": { "$ref": "#/entities/UserPreferences" },
+      "description": "User preferences scoped by ownerId"
+    },
+    "/transactions/{docId}": {
+      "schema": { "$ref": "#/entities/Transaction" },
+      "description": "Personal budgeting transactions scoped by ownerId"
+    },
+    "/importJobs/{docId}": {
+      "schema": { "$ref": "#/entities/ImportJobRecord" },
+      "description": "Bank statement import jobs scoped by ownerId"
+    },
+    "/budgets/{docId}": {
+      "schema": { "$ref": "#/entities/Budget" },
+      "description": "Monthly category budgets scoped by ownerId"
+    },
+    "/portfolios/{docId}": {
+      "schema": { "$ref": "#/entities/Portfolio" },
+      "description": "Investment portfolios scoped by ownerId"
+    },
+    "/holdings/{docId}": {
+      "schema": { "$ref": "#/entities/Holding" },
+      "description": "Investment holdings scoped by ownerId"
+    },
+    "/watchlists/{docId}": {
+      "schema": { "$ref": "#/entities/WatchlistItem" },
+      "description": "Market watchlists scoped by ownerId"
+    },
+    "/backtests/{docId}": {
+      "schema": { "$ref": "#/entities/BacktestRecord" },
+      "description": "Historical strategy backtests scoped by ownerId"
+    },
+    "/paperTrades/{docId}": {
+      "schema": { "$ref": "#/entities/PaperTrade" },
+      "description": "Simulated paper trading history scoped by ownerId"
+    },
+    "/taxProfiles/{docId}": {
+      "schema": { "$ref": "#/entities/TaxProfile" },
+      "description": "Income tax profiles scoped by ownerId"
+    },
+    "/taxDeductions/{docId}": {
+      "schema": { "$ref": "#/entities/TaxDeduction" },
+      "description": "Chapter VI-A tax deductions scoped by ownerId"
+    },
+    "/taxDocuments/{docId}": {
+      "schema": { "$ref": "#/entities/TaxDocument" },
+      "description": "Tax proof documents metadata scoped by ownerId"
+    },
+    "/fraudAnalyses/{docId}": {
+      "schema": { "$ref": "#/entities/FraudAnalysis" },
+      "description": "Gemini fraud scan reports scoped by ownerId"
+    },
+    "/clients/{docId}": {
+      "schema": { "$ref": "#/entities/Client" },
+      "description": "Business clients scoped by ownerId"
+    },
+    "/invoices/{docId}": {
+      "schema": { "$ref": "#/entities/Invoice" },
+      "description": "Business GST invoices scoped by ownerId"
+    },
+    "/businessExpenses/{docId}": {
+      "schema": { "$ref": "#/entities/BusinessExpense" },
+      "description": "Business operating expenses scoped by ownerId"
+    },
+    "/emiPlans/{docId}": {
+      "schema": { "$ref": "#/entities/EMIPlan" },
+      "description": "Saved business loan EMI plans scoped by ownerId"
+    },
+    "/aiConversations/{docId}": {
+      "schema": { "$ref": "#/entities/AIConversationMessage" },
+      "description": "AI conversation turns scoped by ownerId"
+    },
+    "/notifications/{docId}": {
+      "schema": { "$ref": "#/entities/AppNotification" },
+      "description": "User alerts scoped by ownerId"
+    }
+  }
+}
