@@ -12,6 +12,9 @@ import {
   Upload,
   CreditCard,
   Settings,
+  Clock,
+  CheckSquare,
+  ArrowRight,
 } from 'lucide-react';
 import {
   Invoice,
@@ -29,6 +32,7 @@ import {
   validateGSTIN,
 } from '../../utils/financialMath';
 import { apiFetch } from '../../utils/api';
+import { EmptyStateCard } from '../../components/brand/FinSightArtwork';
 
 interface BusinessModuleProps {
   subview: 'overview' | 'invoices' | 'new-invoice' | 'clients' | 'expenses' | 'cash-flow' | 'emi-planner';
@@ -515,33 +519,36 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
   return (
     <div className="p-6 md:p-8 space-y-6 max-w-7xl mx-auto">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#28443C] pb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--fs-border)] pb-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#F5F7F5] tracking-tight">
+          <h1 className="font-display text-2xl sm:text-3xl font-extrabold text-[var(--fs-text)] tracking-tight">
             Small Business Finance
           </h1>
-          <p className="text-xs text-[#A7C1B8] mt-1">
-            {businessProfile?.businessName || 'Your Business'} · GST compliant invoicing, expenses, cash flow forecast, and EMI planner.
+          <p className="text-xs text-[var(--fs-text-body)] mt-1">
+            {businessProfile?.businessName || 'Your Business'} · GST compliant invoicing, expenses, receivables aging, ledger reconciliation, and EMI planner.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
+            type="button"
             onClick={() => setShowProfileModal(true)}
-            className="flex items-center gap-1.5 rounded-lg border border-[#28443C] bg-[#102722] px-3 py-2 text-xs font-medium text-[#A7C1B8] hover:text-[#F5F7F5] hover:border-[#72C8B0] transition-colors"
+            className="fs-btn-secondary flex items-center gap-1.5 px-3 py-2 text-xs"
           >
             <Settings className="h-3.5 w-3.5" />
             <span>Business Profile</span>
           </button>
           <button
+            type="button"
             onClick={onOpenAI}
-            className="flex items-center gap-1.5 rounded-lg border border-[#28443C] bg-[#16352E] px-3 py-2 text-xs font-medium text-[#A8E6CE] hover:border-[#72C8B0] transition-colors"
+            className="fs-btn-secondary flex items-center gap-1.5 px-3 py-2 text-xs text-[var(--fs-accent)]"
           >
             <Building2 className="h-3.5 w-3.5" />
             <span>Ask Business AI</span>
           </button>
           <button
+            type="button"
             onClick={() => onNavigate('/app/business/invoices/new')}
-            className="flex items-center gap-1.5 rounded-lg bg-[#A8E6CE] px-3.5 py-2 text-xs font-semibold text-[#0B1C19] hover:bg-[#72C8B0] transition-colors"
+            className="fs-btn-primary flex items-center gap-1.5 px-3.5 py-2 text-xs"
           >
             <Plus className="h-3.5 w-3.5" />
             <span>Create Invoice</span>
@@ -551,29 +558,31 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
 
       {/* Banners */}
       {actionError && (
-        <div className="p-3.5 rounded-xl bg-[#EB7676]/10 border border-[#EB7676]/40 text-xs text-[#EB7676] flex items-center justify-between gap-2">
+        <div className="p-3.5 rounded-xl bg-[var(--fs-danger)]/10 border border-[var(--fs-danger)]/40 text-xs text-[var(--fs-danger)] flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>{actionError}</span>
           </div>
-          <button onClick={() => setActionError(null)} className="text-[#EB7676] hover:text-white">
+          <button type="button" onClick={() => setActionError(null)} className="text-[var(--fs-danger)] hover:opacity-80" aria-label="Dismiss error">
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
       )}
       {actionSuccess && (
-        <div className="p-3.5 rounded-xl bg-[#55C99A]/10 border border-[#55C99A]/40 text-xs text-[#55C99A] flex items-center gap-2">
+        <div className="p-3.5 rounded-xl bg-[var(--fs-success)]/10 border border-[var(--fs-success)]/40 text-xs text-[var(--fs-success)] flex items-center gap-2">
           <CheckCircle className="h-4 w-4 shrink-0" />
           <span>{actionSuccess}</span>
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-[#28443C] pb-2 overflow-x-auto whitespace-nowrap">
+      {/* Tabs including FinSight 2.0 Receivables & Reconciliation links */}
+      <div className="flex items-center gap-2 border-b border-[var(--fs-border)] pb-2 overflow-x-auto whitespace-nowrap">
         {[
           { label: 'Overview', path: '/app/business', key: 'overview' },
           { label: 'Invoices', path: '/app/business/invoices', key: 'invoices' },
           { label: 'Create Invoice', path: '/app/business/invoices/new', key: 'new-invoice' },
+          { label: 'Receivables & Follow-ups', path: '/app/business/receivables', key: 'receivables' },
+          { label: 'Ledger Reconciliation', path: '/app/business/reconciliation', key: 'reconciliation' },
           { label: 'Clients', path: '/app/business/clients', key: 'clients' },
           { label: 'Business Expenses', path: '/app/business/expenses', key: 'expenses' },
           { label: 'Cash Flow Forecast', path: '/app/business/cash-flow', key: 'cash-flow' },
@@ -581,11 +590,12 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
         ].map(tab => (
           <button
             key={tab.key}
+            type="button"
             onClick={() => onNavigate(tab.path)}
             className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
               subview === tab.key
-                ? 'bg-[#16352E] text-[#A8E6CE] border border-[#28443C]'
-                : 'text-[#A7C1B8] hover:text-[#F5F7F5]'
+                ? 'bg-[var(--fs-brand)] text-white dark:bg-[#168366]'
+                : 'text-[var(--fs-text-body)] hover:bg-[var(--fs-surface-2)] hover:text-[var(--fs-text)]'
             }`}
           >
             {tab.label}
@@ -594,7 +604,7 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
       </div>
 
       {isLoading && (
-        <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-6 text-xs text-[#A7C1B8]">
+        <div className="fs-card p-6 text-xs text-[var(--fs-text-body)]">
           Loading business ledger, GST invoices, and cash flow projections...
         </div>
       )}
@@ -603,61 +613,101 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
       {!isLoading && subview === 'overview' && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-5 space-y-1">
-              <span className="text-xs text-[#718D83]">Total Billed (Invoices)</span>
-              <div className="text-2xl font-bold text-[#F5F7F5] tabular-nums">{formatINR(totalBilled)}</div>
-              <span className="text-[11px] text-[#718D83]">{invoices.length} GST invoice{invoices.length === 1 ? '' : 's'}</span>
+            <div className="fs-card p-5 space-y-1">
+              <span className="text-xs text-[var(--fs-text-muted)]">Total Billed (Invoices)</span>
+              <div className="font-mono-num text-2xl font-bold text-[var(--fs-text)] tabular-nums">{formatINR(totalBilled)}</div>
+              <span className="text-[11px] text-[var(--fs-text-muted)]">{invoices.length} GST invoice{invoices.length === 1 ? '' : 's'}</span>
             </div>
-            <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-5 space-y-1">
-              <span className="text-xs text-[#718D83]">Payments Collected</span>
-              <div className="text-2xl font-bold text-[#55C99A] tabular-nums">{formatINR(totalReceived)}</div>
-              <span className="text-[11px] text-[#55C99A]">Realized collections</span>
+            <div className="fs-card p-5 space-y-1">
+              <span className="text-xs text-[var(--fs-text-muted)]">Payments Collected</span>
+              <div className="font-mono-num text-2xl font-bold text-[var(--fs-success)] tabular-nums">{formatINR(totalReceived)}</div>
+              <span className="text-[11px] text-[var(--fs-success)]">Realized collections</span>
             </div>
-            <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-5 space-y-1">
-              <span className="text-xs text-[#718D83]">Outstanding Receivables</span>
-              <div className="text-2xl font-bold text-[#E5B764] tabular-nums">{formatINR(totalOutstanding)}</div>
-              <span className="text-[11px] text-[#718D83]">Awaiting settlement</span>
+            <div className="fs-card p-5 space-y-1">
+              <span className="text-xs text-[var(--fs-text-muted)]">Outstanding Receivables</span>
+              <div className="font-mono-num text-2xl font-bold text-[var(--fs-warning)] tabular-nums">{formatINR(totalOutstanding)}</div>
+              <span className="text-[11px] text-[var(--fs-text-muted)]">Awaiting settlement</span>
             </div>
-            <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-5 space-y-1">
-              <span className="text-xs text-[#718D83]">Operational Expenses</span>
-              <div className="text-2xl font-bold text-[#EB7676] tabular-nums">{formatINR(totalBizExpenses)}</div>
-              <span className="text-[11px] text-[#718D83]">{expenses.length} recorded expense{expenses.length === 1 ? '' : 's'}</span>
+            <div className="fs-card p-5 space-y-1">
+              <span className="text-xs text-[var(--fs-text-muted)]">Operational Expenses</span>
+              <div className="font-mono-num text-2xl font-bold text-[var(--fs-danger)] tabular-nums">{formatINR(totalBizExpenses)}</div>
+              <span className="text-[11px] text-[var(--fs-text-muted)]">{expenses.length} recorded expense{expenses.length === 1 ? '' : 's'}</span>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-4">
+          {/* FinSight 2.0 Quick Links for Receivables & Reconciliation */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="fs-card p-5 flex items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-sm font-bold text-[var(--fs-text)]">
+                  <Clock className="h-4 w-4 text-[var(--fs-warning)]" />
+                  <span>Receivables Aging & Follow-up Queue</span>
+                </div>
+                <p className="text-xs text-[var(--fs-text-body)]">
+                  Inspect overdue 1–30 / 31–60 / 61–90 / 90+ day invoice buckets and track client payment reminders.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onNavigate('/app/business/receivables')}
+                className="fs-btn-secondary px-3 py-2 text-xs inline-flex items-center gap-1 shrink-0"
+              >
+                <span>Open</span>
+                <ArrowRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <div className="fs-card p-5 flex items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-sm font-bold text-[var(--fs-text)]">
+                  <CheckSquare className="h-4 w-4 text-[var(--fs-accent)]" />
+                  <span>Ledger & Invoice Reconciliation</span>
+                </div>
+                <p className="text-xs text-[var(--fs-text-body)]">
+                  Match incoming bank credits against issued GST invoices and review unmatched payment exceptions.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onNavigate('/app/business/reconciliation')}
+                className="fs-btn-secondary px-3 py-2 text-xs inline-flex items-center gap-1 shrink-0"
+              >
+                <span>Open</span>
+                <ArrowRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+
+          <div className="fs-card p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-[#F5F7F5]">Recent Invoices</h3>
-              <button onClick={() => onNavigate('/app/business/invoices')} className="text-xs text-[#A8E6CE] hover:underline">
+              <h3 className="text-sm font-bold text-[var(--fs-text)]">Recent Invoices</h3>
+              <button type="button" onClick={() => onNavigate('/app/business/invoices')} className="text-xs font-medium text-[var(--fs-accent)] hover:underline">
                 View All Invoices →
               </button>
             </div>
             {invoices.length === 0 ? (
-              <div className="py-6 text-center text-xs text-[#718D83] space-y-2">
-                <p>No invoices generated yet.</p>
-                <button
-                  onClick={() => onNavigate('/app/business/invoices/new')}
-                  className="rounded-lg bg-[#A8E6CE] px-3 py-1.5 text-xs font-bold text-[#0B1C19]"
-                >
-                  Create Your First GST Invoice
-                </button>
-              </div>
+              <EmptyStateCard
+                variant="invoices"
+                title="No GST invoices generated yet"
+                description="Issue compliant CGST/SGST or IGST tax invoices with multi-rate line items, downloadable PDFs, and automatic receivables tracking."
+                actionLabel="Create Your First GST Invoice"
+                onAction={() => onNavigate('/app/business/invoices/new')}
+              />
             ) : (
-              <div className="divide-y divide-[#28443C]/50">
+              <div className="divide-y divide-[var(--fs-border)]">
                 {invoices.slice(0, 6).map(inv => (
                   <div key={inv.id} className="py-3 flex items-center justify-between text-xs">
                     <div>
-                      <div className="font-bold text-[#F5F7F5]">{inv.invoiceNumber} · {inv.clientName}</div>
-                      <div className="text-[10px] text-[#718D83]">Issued: {inv.invoiceDate} · Due: {inv.dueDate}</div>
+                      <div className="font-bold text-[var(--fs-text)]">{inv.invoiceNumber} · {inv.clientName}</div>
+                      <div className="text-[10px] text-[var(--fs-text-muted)]">Issued: {inv.invoiceDate} · Due: {inv.dueDate}</div>
                     </div>
                     <div className="text-right">
-                      <div className="font-bold text-[#F5F7F5] tabular-nums">{formatINR(inv.total)}</div>
+                      <div className="font-mono-num font-bold text-[var(--fs-text)] tabular-nums">{formatINR(inv.total)}</div>
                       <span className={`text-[10px] font-bold ${
                         inv.status === 'PAID'
-                          ? 'text-[#55C99A]'
+                          ? 'text-[var(--fs-success)]'
                           : inv.status === 'PARTIALLY_PAID'
-                          ? 'text-[#7BB9DC]'
-                          : 'text-[#E5B764]'
+                          ? 'text-[var(--fs-info)]'
+                          : 'text-[var(--fs-warning)]'
                       }`}>
                         {inv.status}
                       </span>
@@ -673,30 +723,31 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
       {/* SUBVIEW 2: INVOICES LIST */}
       {!isLoading && subview === 'invoices' && (
         <div className="space-y-4">
-          <div className="rounded-2xl border border-[#28443C] bg-[#102722] overflow-hidden">
-            <div className="p-4 border-b border-[#28443C] flex items-center justify-between">
-              <h3 className="text-sm font-bold text-[#F5F7F5]">Invoices & Billing History</h3>
+          <div className="fs-card overflow-hidden">
+            <div className="p-4 border-b border-[var(--fs-border)] flex items-center justify-between">
+              <h3 className="text-sm font-bold text-[var(--fs-text)]">Invoices & Billing History</h3>
               <button
+                type="button"
                 onClick={() => onNavigate('/app/business/invoices/new')}
-                className="rounded-lg bg-[#A8E6CE] px-3 py-1.5 text-xs font-bold text-[#0B1C19]"
+                className="fs-btn-primary px-3 py-1.5 text-xs"
               >
                 + New Invoice
               </button>
             </div>
             {invoices.length === 0 ? (
-              <div className="p-8 text-center text-xs text-[#718D83] space-y-2">
-                <p>No GST invoices recorded in your account.</p>
-                <button
-                  onClick={() => onNavigate('/app/business/invoices/new')}
-                  className="rounded-lg bg-[#A8E6CE] px-3 py-1.5 text-xs font-bold text-[#0B1C19]"
-                >
-                  Create Invoice
-                </button>
+              <div className="p-4">
+                <EmptyStateCard
+                  variant="invoices"
+                  title="No GST invoices recorded"
+                  description="Create a GST-compliant invoice to generate downloadable PDFs and track client settlements."
+                  actionLabel="Create Invoice"
+                  onAction={() => onNavigate('/app/business/invoices/new')}
+                />
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-[#16352E]/40 border-b border-[#28443C] text-[#718D83]">
+                  <thead className="bg-[var(--fs-surface-2)] border-b border-[var(--fs-border)] text-[var(--fs-text-muted)]">
                     <tr>
                       <th className="py-3 px-4 font-medium">Invoice #</th>
                       <th className="py-3 px-4 font-medium">Client</th>
@@ -709,26 +760,26 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
                       <th className="py-3 px-4 font-medium text-right">Action</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#28443C]/40">
+                  <tbody className="divide-y divide-[var(--fs-border)]">
                     {invoices.map(inv => (
-                      <tr key={inv.id} className="hover:bg-[#16352E]/20 transition-colors">
-                        <td className="py-3 px-4 font-bold text-[#F5F7F5] whitespace-nowrap">{inv.invoiceNumber}</td>
-                        <td className="py-3 px-4 text-[#A7C1B8]">
+                      <tr key={inv.id} className="hover:bg-[var(--fs-surface-2)]/50 transition-colors">
+                        <td className="py-3 px-4 font-bold text-[var(--fs-text)] whitespace-nowrap">{inv.invoiceNumber}</td>
+                        <td className="py-3 px-4 text-[var(--fs-text-body)]">
                           <div>{inv.clientName}</div>
-                          {inv.clientGstin && <div className="text-[10px] font-mono text-[#718D83]">{inv.clientGstin}</div>}
+                          {inv.clientGstin && <div className="text-[10px] font-mono text-[var(--fs-text-muted)]">{inv.clientGstin}</div>}
                         </td>
-                        <td className="py-3 px-4 text-[#718D83] whitespace-nowrap">{inv.dueDate}</td>
-                        <td className="py-3 px-4 text-right tabular-nums text-[#718D83]">{formatINR(inv.subtotal)}</td>
-                        <td className="py-3 px-4 text-right tabular-nums text-[#718D83]">{formatINR(inv.totalGst)}</td>
-                        <td className="py-3 px-4 text-right font-bold tabular-nums text-[#F5F7F5]">{formatINR(inv.total)}</td>
-                        <td className="py-3 px-4 text-right tabular-nums text-[#E5B764]">{formatINR(inv.balanceDue)}</td>
+                        <td className="py-3 px-4 text-[var(--fs-text-muted)] whitespace-nowrap">{inv.dueDate}</td>
+                        <td className="py-3 px-4 text-right font-mono-num tabular-nums text-[var(--fs-text-body)]">{formatINR(inv.subtotal)}</td>
+                        <td className="py-3 px-4 text-right font-mono-num tabular-nums text-[var(--fs-text-body)]">{formatINR(inv.totalGst)}</td>
+                        <td className="py-3 px-4 text-right font-mono-num font-bold tabular-nums text-[var(--fs-text)]">{formatINR(inv.total)}</td>
+                        <td className="py-3 px-4 text-right font-mono-num tabular-nums text-[var(--fs-warning)]">{formatINR(inv.balanceDue)}</td>
                         <td className="py-3 px-4 text-right">
                           <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                             inv.status === 'PAID'
-                              ? 'bg-[#55C99A]/20 text-[#55C99A]'
+                              ? 'bg-[var(--fs-success)]/15 text-[var(--fs-success)]'
                               : inv.status === 'PARTIALLY_PAID'
-                              ? 'bg-[#7BB9DC]/20 text-[#7BB9DC]'
-                              : 'bg-[#E5B764]/20 text-[#E5B764]'
+                              ? 'bg-[var(--fs-info)]/15 text-[var(--fs-info)]'
+                              : 'bg-[var(--fs-warning)]/15 text-[var(--fs-warning)]'
                           }`}>
                             {inv.status}
                           </span>
@@ -736,17 +787,19 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
                         <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             <button
+                              type="button"
                               onClick={() => setSelectedInvoiceForPdf(inv)}
-                              className="rounded-lg bg-[#16352E] border border-[#28443C] px-2 py-1 text-[11px] text-[#A8E6CE] hover:border-[#72C8B0] flex items-center gap-1"
+                              className="fs-btn-secondary px-2 py-1 text-[11px] flex items-center gap-1"
                               title="Preview Tax Invoice"
                             >
                               <FileText className="h-3 w-3" />
                               <span>Preview</span>
                             </button>
                             <button
+                              type="button"
                               onClick={() => handleDownloadInvoicePdf(inv)}
                               disabled={isDownloadingPdfId === inv.id}
-                              className="rounded-lg bg-[#16352E] border border-[#28443C] px-2 py-1 text-[11px] text-[#7BB9DC] hover:border-[#7BB9DC] flex items-center gap-1 disabled:opacity-50"
+                              className="fs-btn-secondary px-2 py-1 text-[11px] text-[var(--fs-info)] flex items-center gap-1 disabled:opacity-50"
                               title="Download Binary PDF"
                             >
                               <Download className="h-3 w-3" />
@@ -754,19 +807,21 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
                             </button>
                             {inv.status !== 'PAID' && (
                               <button
+                                type="button"
                                 onClick={() => {
                                   setPaymentModalInvoice(inv);
                                   setPaymentAmountInput(String(inv.balanceDue));
                                 }}
-                                className="rounded-lg bg-[#16352E] border border-[#28443C] px-2.5 py-1 text-[11px] text-[#55C99A] hover:border-[#55C99A] flex items-center gap-1"
+                                className="fs-btn-secondary px-2.5 py-1 text-[11px] text-[var(--fs-success)] flex items-center gap-1"
                               >
                                 <CreditCard className="h-3 w-3" />
                                 <span>Record Pay</span>
                               </button>
                             )}
                             <button
+                              type="button"
                               onClick={() => handleDeleteInvoice(inv.id)}
-                              className="rounded-lg border border-[#28443C] p-1 text-[#718D83] hover:text-[#EB7676] hover:border-[#EB7676]/40"
+                              className="rounded-lg border border-[var(--fs-border)] p-1 text-[var(--fs-text-muted)] hover:text-[var(--fs-danger)] hover:border-[var(--fs-danger)]/40"
                               title="Delete Invoice"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
@@ -787,22 +842,22 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
       {!isLoading && subview === 'new-invoice' && (
         <div className="space-y-6 max-w-4xl">
           {invoiceSuccess && (
-            <div className="p-4 rounded-xl bg-[#55C99A]/10 border border-[#55C99A]/40 text-xs text-[#55C99A] flex items-center gap-2">
+            <div className="p-4 rounded-xl bg-[var(--fs-success)]/10 border border-[var(--fs-success)]/40 text-xs text-[var(--fs-success)] flex items-center gap-2">
               <CheckCircle className="h-4 w-4" />
               <span>Invoice generated successfully with verified GST breakdown.</span>
             </div>
           )}
 
-          <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-6">
-            <h3 className="text-base font-bold text-[#F5F7F5]">Create GST Compliant Invoice</h3>
+          <div className="fs-card p-6 space-y-6">
+            <h3 className="text-base font-bold text-[var(--fs-text)]">Create GST Compliant Invoice</h3>
             <form onSubmit={handleGenerateInvoice} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Select Existing Client (Optional)</label>
+                  <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Select Existing Client (Optional)</label>
                   <select
                     value={selectedClientId}
                     onChange={e => handleSelectClientForInvoice(e.target.value)}
-                    className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                    className="fs-input"
                   >
                     <option value="">-- Enter client details manually --</option>
                     {clients.map(c => (
@@ -813,11 +868,11 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Place of Supply (GST Jurisdiction)</label>
+                  <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Place of Supply (GST Jurisdiction)</label>
                   <select
                     value={placeOfSupply}
                     onChange={e => setPlaceOfSupply(e.target.value)}
-                    className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                    className="fs-input"
                   >
                     {PLACE_OF_SUPPLY_OPTIONS.map(opt => (
                       <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -828,36 +883,36 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Client / Company Name</label>
+                  <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Client / Company Name</label>
                   <input
                     type="text"
                     value={clientName}
                     onChange={e => setClientName(e.target.value)}
                     placeholder="e.g. Zenith Tech Systems Pvt Ltd"
-                    className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                    className="fs-input"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Client GSTIN (Optional)</label>
+                  <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Client GSTIN (Optional)</label>
                   <input
                     type="text"
                     value={clientGstin}
                     onChange={e => setClientGstin(e.target.value.toUpperCase())}
                     placeholder="29AABCC1234D1Z5"
-                    className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5] font-mono"
+                    className="fs-input font-mono"
                   />
                   {clientGstin.trim() && !validateGSTIN(clientGstin) && (
-                    <span className="text-[10px] text-[#EB7676]">Invalid 15-char GSTIN format</span>
+                    <span className="text-[10px] text-[var(--fs-danger)]">Invalid 15-char GSTIN format</span>
                   )}
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Due Date</label>
+                  <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Due Date</label>
                   <input
                     type="date"
                     value={invoiceDueDate}
                     onChange={e => setInvoiceDueDate(e.target.value)}
-                    className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                    className="fs-input"
                     required
                   />
                 </div>
@@ -866,7 +921,7 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
               {/* Line Items */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-[#F5F7F5]">Line Items & Per-Item GST Slab</label>
+                  <label className="text-xs font-bold text-[var(--fs-text)]">Line Items & Per-Item GST Slab</label>
                   <button
                     type="button"
                     onClick={() =>
@@ -875,7 +930,7 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
                         { id: `li-${Date.now()}`, description: '', quantity: '1', unitPrice: '10000', taxRate: 18 },
                       ])
                     }
-                    className="text-xs text-[#A8E6CE] hover:underline flex items-center gap-1"
+                    className="text-xs font-medium text-[var(--fs-accent)] hover:underline flex items-center gap-1"
                   >
                     <Plus className="h-3.5 w-3.5" />
                     <span>Add Line Item</span>
@@ -883,9 +938,9 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
                 </div>
 
                 {lineItems.map((item, idx) => (
-                  <div key={item.id} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end p-3 rounded-xl bg-[#0B1C19] border border-[#28443C]">
+                  <div key={item.id} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end p-3 rounded-xl bg-[var(--fs-surface-2)] border border-[var(--fs-border)]">
                     <div className="sm:col-span-5">
-                      <label className="block text-[10px] text-[#718D83] mb-1">Description</label>
+                      <label className="block text-[10px] text-[var(--fs-text-muted)] mb-1">Description</label>
                       <input
                         type="text"
                         value={item.description}
@@ -893,12 +948,12 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
                           setLineItems(prev => prev.map((it, i) => (i === idx ? { ...it, description: e.target.value } : it)))
                         }
                         placeholder="Item or service description"
-                        className="w-full rounded-lg bg-[#102722] border border-[#28443C] px-2.5 py-1.5 text-xs text-[#F5F7F5]"
+                        className="fs-input"
                         required
                       />
                     </div>
                     <div className="sm:col-span-2">
-                      <label className="block text-[10px] text-[#718D83] mb-1">Qty</label>
+                      <label className="block text-[10px] text-[var(--fs-text-muted)] mb-1">Qty</label>
                       <input
                         type="number"
                         step="0.01"
@@ -907,12 +962,12 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
                         onChange={e =>
                           setLineItems(prev => prev.map((it, i) => (i === idx ? { ...it, quantity: e.target.value } : it)))
                         }
-                        className="w-full rounded-lg bg-[#102722] border border-[#28443C] px-2.5 py-1.5 text-xs text-[#F5F7F5]"
+                        className="fs-input"
                         required
                       />
                     </div>
                     <div className="sm:col-span-2">
-                      <label className="block text-[10px] text-[#718D83] mb-1">Unit Price (₹)</label>
+                      <label className="block text-[10px] text-[var(--fs-text-muted)] mb-1">Unit Price (₹)</label>
                       <input
                         type="number"
                         min="0"
@@ -920,12 +975,12 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
                         onChange={e =>
                           setLineItems(prev => prev.map((it, i) => (i === idx ? { ...it, unitPrice: e.target.value } : it)))
                         }
-                        className="w-full rounded-lg bg-[#102722] border border-[#28443C] px-2.5 py-1.5 text-xs text-[#F5F7F5]"
+                        className="fs-input"
                         required
                       />
                     </div>
                     <div className="sm:col-span-2">
-                      <label className="block text-[10px] text-[#718D83] mb-1">GST Rate</label>
+                      <label className="block text-[10px] text-[var(--fs-text-muted)] mb-1">GST Rate</label>
                       <select
                         value={item.taxRate}
                         onChange={e =>
@@ -933,7 +988,7 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
                             prev.map((it, i) => (i === idx ? { ...it, taxRate: Number(e.target.value) } : it))
                           )
                         }
-                        className="w-full rounded-lg bg-[#102722] border border-[#28443C] px-2 py-1.5 text-xs text-[#F5F7F5]"
+                        className="fs-input"
                       >
                         {GST_SLABS.map(rate => (
                           <option key={rate} value={rate}>{rate}% GST</option>
@@ -945,7 +1000,7 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
                         <button
                           type="button"
                           onClick={() => setLineItems(prev => prev.filter((_, i) => i !== idx))}
-                          className="p-1.5 rounded-lg text-[#718D83] hover:text-[#EB7676]"
+                          className="p-1.5 rounded-lg text-[var(--fs-text-muted)] hover:text-[var(--fs-danger)]"
                           title="Remove line item"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -957,48 +1012,48 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Notes / Payment Terms (Optional)</label>
+                <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Notes / Payment Terms (Optional)</label>
                 <input
                   type="text"
                   value={invoiceNotes}
                   onChange={e => setInvoiceNotes(e.target.value)}
                   placeholder="NEFT / RTGS within 30 days. SAC 998314."
-                  className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                  className="fs-input"
                 />
               </div>
 
               {/* Dynamic Multi-Rate GST Calculation Box */}
-              <div className="p-4 rounded-xl bg-[#0B1C19] border border-[#28443C] space-y-2 text-xs">
-                <div className="flex justify-between text-[#A7C1B8]">
+              <div className="p-4 rounded-xl bg-[var(--fs-surface-2)] border border-[var(--fs-border)] space-y-2 text-xs">
+                <div className="flex justify-between text-[var(--fs-text-body)]">
                   <span>Taxable Value:</span>
-                  <span className="font-semibold text-[#F5F7F5] tabular-nums">{formatINR(invoicePreviewTotals.taxableAmount)}</span>
+                  <span className="font-mono-num font-semibold text-[var(--fs-text)] tabular-nums">{formatINR(invoicePreviewTotals.taxableAmount)}</span>
                 </div>
                 {isInterStatePreview ? (
-                  <div className="flex justify-between text-[#A7C1B8]">
+                  <div className="flex justify-between text-[var(--fs-text-body)]">
                     <span>IGST (Interstate Supply):</span>
-                    <span className="font-semibold text-[#F5F7F5] tabular-nums">{formatINR(invoicePreviewTotals.igst)}</span>
+                    <span className="font-mono-num font-semibold text-[var(--fs-text)] tabular-nums">{formatINR(invoicePreviewTotals.igst)}</span>
                   </div>
                 ) : (
                   <>
-                    <div className="flex justify-between text-[#A7C1B8]">
+                    <div className="flex justify-between text-[var(--fs-text-body)]">
                       <span>CGST (Intrastate Central Share):</span>
-                      <span className="font-semibold text-[#F5F7F5] tabular-nums">{formatINR(invoicePreviewTotals.cgst)}</span>
+                      <span className="font-mono-num font-semibold text-[var(--fs-text)] tabular-nums">{formatINR(invoicePreviewTotals.cgst)}</span>
                     </div>
-                    <div className="flex justify-between text-[#A7C1B8]">
+                    <div className="flex justify-between text-[var(--fs-text-body)]">
                       <span>SGST (Intrastate State Share):</span>
-                      <span className="font-semibold text-[#F5F7F5] tabular-nums">{formatINR(invoicePreviewTotals.sgst)}</span>
+                      <span className="font-mono-num font-semibold text-[var(--fs-text)] tabular-nums">{formatINR(invoicePreviewTotals.sgst)}</span>
                     </div>
                   </>
                 )}
-                <div className="flex justify-between text-sm font-bold text-[#F5F7F5] pt-2 border-t border-[#28443C]">
+                <div className="flex justify-between text-sm font-bold text-[var(--fs-text)] pt-2 border-t border-[var(--fs-border)]">
                   <span>Invoice Total:</span>
-                  <span className="text-[#A8E6CE] tabular-nums">{formatINR(invoicePreviewTotals.totalInvoiceAmount)}</span>
+                  <span className="font-mono-num text-[var(--fs-accent)] tabular-nums">{formatINR(invoicePreviewTotals.totalInvoiceAmount)}</span>
                 </div>
               </div>
 
               <button
                 type="submit"
-                className="w-full rounded-xl bg-[#A8E6CE] py-3 text-xs font-bold text-[#0B1C19] hover:bg-[#72C8B0]"
+                className="fs-btn-primary w-full py-3 text-xs"
               >
                 Generate GST Invoice
               </button>
@@ -1012,50 +1067,50 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
         <div className="space-y-6 max-w-5xl">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
             {/* Input Form */}
-            <div className="md:col-span-5 rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-4">
-              <h3 className="text-sm font-bold text-[#F5F7F5]">Loan & Repayment Parameters</h3>
+            <div className="md:col-span-5 fs-card p-6 space-y-4">
+              <h3 className="text-sm font-bold text-[var(--fs-text)]">Loan & Repayment Parameters</h3>
               <div className="space-y-3">
                 <div>
-                  <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Plan / Loan Name</label>
+                  <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Plan / Loan Name</label>
                   <input
                     type="text"
                     value={emiPlanName}
                     onChange={e => setEmiPlanName(e.target.value)}
-                    className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                    className="fs-input"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Loan Amount (₹)</label>
+                  <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Loan Amount (₹)</label>
                   <input
                     type="number"
                     value={loanAmount}
                     onChange={e => setLoanAmount(e.target.value)}
-                    className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                    className="fs-input"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Annual Interest Rate (%)</label>
+                  <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Annual Interest Rate (%)</label>
                   <input
                     type="number"
                     step="0.1"
                     value={interestRate}
                     onChange={e => setInterestRate(e.target.value)}
-                    className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                    className="fs-input"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Tenure (Months)</label>
+                  <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Tenure (Months)</label>
                   <input
                     type="number"
                     value={tenureMonths}
                     onChange={e => setTenureMonths(e.target.value)}
-                    className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                    className="fs-input"
                   />
                 </div>
                 <button
                   type="button"
                   onClick={handleSaveEMIPlan}
-                  className="w-full rounded-xl bg-[#16352E] border border-[#28443C] py-2 text-xs font-semibold text-[#A8E6CE] hover:border-[#72C8B0]"
+                  className="fs-btn-primary w-full py-2 text-xs"
                 >
                   Save Scenario to Account
                 </button>
@@ -1063,33 +1118,33 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
             </div>
 
             {/* Live Calculation Display */}
-            <div className="md:col-span-7 rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-5 flex flex-col justify-between">
+            <div className="md:col-span-7 fs-card p-6 space-y-5 flex flex-col justify-between">
               <div>
-                <h3 className="text-sm font-bold text-[#F5F7F5]">Reducing-Balance Repayment Summary</h3>
-                <p className="text-xs text-[#718D83] mt-0.5">Calculated using standard reducing-balance amortized interest.</p>
+                <h3 className="text-sm font-bold text-[var(--fs-text)]">Reducing-Balance Repayment Summary</h3>
+                <p className="text-xs text-[var(--fs-text-muted)] mt-0.5">Calculated using standard reducing-balance amortized interest.</p>
 
                 <div className="grid grid-cols-3 gap-3 mt-4 text-center">
-                  <div className="p-3 rounded-xl bg-[#0B1C19] border border-[#28443C]">
-                    <div className="text-[10px] text-[#718D83]">Monthly EMI</div>
-                    <div className="text-lg font-bold text-[#A8E6CE] tabular-nums mt-1">{formatINR(calculatedEMI.monthlyEMI)}</div>
+                  <div className="p-3 rounded-xl bg-[var(--fs-surface-2)] border border-[var(--fs-border)]">
+                    <div className="text-[10px] text-[var(--fs-text-muted)]">Monthly EMI</div>
+                    <div className="font-mono-num text-lg font-bold text-[var(--fs-accent)] tabular-nums mt-1">{formatINR(calculatedEMI.monthlyEMI)}</div>
                   </div>
-                  <div className="p-3 rounded-xl bg-[#0B1C19] border border-[#28443C]">
-                    <div className="text-[10px] text-[#718D83]">Total Interest</div>
-                    <div className="text-lg font-bold text-[#EB7676] tabular-nums mt-1">{formatINR(calculatedEMI.totalInterest)}</div>
+                  <div className="p-3 rounded-xl bg-[var(--fs-surface-2)] border border-[var(--fs-border)]">
+                    <div className="text-[10px] text-[var(--fs-text-muted)]">Total Interest</div>
+                    <div className="font-mono-num text-lg font-bold text-[var(--fs-danger)] tabular-nums mt-1">{formatINR(calculatedEMI.totalInterest)}</div>
                   </div>
-                  <div className="p-3 rounded-xl bg-[#0B1C19] border border-[#28443C]">
-                    <div className="text-[10px] text-[#718D83]">Total Payable</div>
-                    <div className="text-lg font-bold text-[#F5F7F5] tabular-nums mt-1">{formatINR(calculatedEMI.totalPayment)}</div>
+                  <div className="p-3 rounded-xl bg-[var(--fs-surface-2)] border border-[var(--fs-border)]">
+                    <div className="text-[10px] text-[var(--fs-text-muted)]">Total Payable</div>
+                    <div className="font-mono-num text-lg font-bold text-[var(--fs-text)] tabular-nums mt-1">{formatINR(calculatedEMI.totalPayment)}</div>
                   </div>
                 </div>
 
                 {calculatedEMI.amortizationSchedule.length > 0 && (
-                  <div className="mt-4 rounded-xl bg-[#0B1C19] border border-[#28443C] overflow-hidden">
-                    <div className="px-3 py-2 border-b border-[#28443C] text-[11px] font-bold text-[#A7C1B8]">
+                  <div className="mt-4 rounded-xl bg-[var(--fs-surface-2)] border border-[var(--fs-border)] overflow-hidden">
+                    <div className="px-3 py-2 border-b border-[var(--fs-border)] text-[11px] font-bold text-[var(--fs-text)]">
                       First 6 Months Amortization Preview
                     </div>
                     <table className="w-full text-left text-[11px]">
-                      <thead className="text-[#718D83] border-b border-[#28443C]/60">
+                      <thead className="text-[var(--fs-text-muted)] border-b border-[var(--fs-border)]">
                         <tr>
                           <th className="py-1.5 px-3">Month</th>
                           <th className="py-1.5 px-3 text-right">Principal</th>
@@ -1097,13 +1152,13 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
                           <th className="py-1.5 px-3 text-right">Balance</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-[#28443C]/40">
+                      <tbody className="divide-y divide-[var(--fs-border)]">
                         {calculatedEMI.amortizationSchedule.slice(0, 6).map(row => (
                           <tr key={row.month}>
-                            <td className="py-1.5 px-3 text-[#A7C1B8]">Month {row.month}</td>
-                            <td className="py-1.5 px-3 text-right tabular-nums text-[#55C99A]">{formatINR(row.principalPaid)}</td>
-                            <td className="py-1.5 px-3 text-right tabular-nums text-[#EB7676]">{formatINR(row.interestPaid)}</td>
-                            <td className="py-1.5 px-3 text-right tabular-nums text-[#F5F7F5]">{formatINR(row.remainingBalance)}</td>
+                            <td className="py-1.5 px-3 text-[var(--fs-text-body)]">Month {row.month}</td>
+                            <td className="py-1.5 px-3 text-right font-mono-num tabular-nums text-[var(--fs-success)]">{formatINR(row.principalPaid)}</td>
+                            <td className="py-1.5 px-3 text-right font-mono-num tabular-nums text-[var(--fs-danger)]">{formatINR(row.interestPaid)}</td>
+                            <td className="py-1.5 px-3 text-right font-mono-num tabular-nums text-[var(--fs-text)]">{formatINR(row.remainingBalance)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -1113,25 +1168,26 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
               </div>
 
               {/* Saved Plans */}
-              <div className="space-y-2 border-t border-[#28443C] pt-4">
-                <span className="text-xs font-bold text-[#F5F7F5]">Saved Business Loan Scenarios:</span>
+              <div className="space-y-2 border-t border-[var(--fs-border)] pt-4">
+                <span className="text-xs font-bold text-[var(--fs-text)]">Saved Business Loan Scenarios:</span>
                 {emiPlans.length === 0 ? (
-                  <p className="text-xs text-[#718D83]">No saved loan scenarios yet.</p>
+                  <p className="text-xs text-[var(--fs-text-muted)]">No saved loan scenarios yet.</p>
                 ) : (
                   <div className="space-y-1.5">
                     {emiPlans.map(plan => (
-                      <div key={plan.id} className="p-2.5 rounded-xl bg-[#0B1C19] border border-[#28443C] flex items-center justify-between text-xs">
+                      <div key={plan.id} className="p-2.5 rounded-xl bg-[var(--fs-surface-2)] border border-[var(--fs-border)] flex items-center justify-between text-xs">
                         <div>
-                          <span className="font-semibold text-[#F5F7F5]">{plan.planName}</span>
-                          <div className="text-[10px] text-[#718D83]">
+                          <span className="font-semibold text-[var(--fs-text)]">{plan.planName}</span>
+                          <div className="text-[10px] text-[var(--fs-text-muted)]">
                             {formatINR(plan.loanAmount)} @ {plan.annualInterestRate}% · {plan.tenureMonths} mos
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
-                          <div className="font-bold text-[#A8E6CE] tabular-nums">{formatINR(plan.monthlyEMI)}/mo</div>
+                          <div className="font-mono-num font-bold text-[var(--fs-accent)] tabular-nums">{formatINR(plan.monthlyEMI)}/mo</div>
                           <button
+                            type="button"
                             onClick={() => handleDeleteEMIPlan(plan.id)}
-                            className="text-[#718D83] hover:text-[#EB7676]"
+                            className="text-[var(--fs-text-muted)] hover:text-[var(--fs-danger)]"
                             title="Delete EMI scenario"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -1150,15 +1206,15 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
       {/* SUBVIEWS: CASH FLOW, EXPENSES, CLIENTS */}
       {!isLoading && (subview === 'cash-flow' || subview === 'expenses' || subview === 'clients') && (
         <div className="space-y-6 max-w-5xl">
-          <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-4">
+          <div className="fs-card p-6 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h3 className="text-sm font-bold text-[#F5F7F5]">
+                <h3 className="text-sm font-bold text-[var(--fs-text)]">
                   {subview === 'cash-flow' && 'Live Business Cash Flow Forecast'}
                   {subview === 'expenses' && 'Business Operational Expenses & Receipt Vault'}
                   {subview === 'clients' && 'Corporate Clients Directory'}
                 </h3>
-                <p className="text-xs text-[#A7C1B8] mt-0.5">
+                <p className="text-xs text-[var(--fs-text-body)] mt-0.5">
                   {subview === 'cash-flow' && 'Calculated live from your opening balance, unpaid invoice receivables, logged expenses, and EMI obligations.'}
                   {subview === 'expenses' && 'Track deductible business operating expenses with attached PDF or image receipts.'}
                   {subview === 'clients' && 'Verified client directory with validated 15-character GSTIN numbers.'}
@@ -1166,8 +1222,9 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
               </div>
               {subview === 'clients' && (
                 <button
+                  type="button"
                   onClick={() => setShowClientModal(true)}
-                  className="rounded-lg bg-[#A8E6CE] px-3 py-1.5 text-xs font-bold text-[#0B1C19] hover:bg-[#72C8B0] flex items-center gap-1 shrink-0"
+                  className="fs-btn-primary px-3 py-1.5 text-xs flex items-center gap-1 shrink-0"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   <span>Add Client</span>
@@ -1175,8 +1232,9 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
               )}
               {subview === 'expenses' && (
                 <button
+                  type="button"
                   onClick={() => setShowExpenseModal(true)}
-                  className="rounded-lg bg-[#A8E6CE] px-3 py-1.5 text-xs font-bold text-[#0B1C19] hover:bg-[#72C8B0] flex items-center gap-1 shrink-0"
+                  className="fs-btn-primary px-3 py-1.5 text-xs flex items-center gap-1 shrink-0"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   <span>Log Business Expense</span>
@@ -1184,8 +1242,9 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
               )}
               {subview === 'cash-flow' && (
                 <button
+                  type="button"
                   onClick={() => setShowProfileModal(true)}
-                  className="rounded-lg border border-[#28443C] bg-[#16352E] px-3 py-1.5 text-xs font-semibold text-[#A8E6CE] hover:border-[#72C8B0] shrink-0"
+                  className="fs-btn-secondary px-3 py-1.5 text-xs shrink-0"
                 >
                   Update Opening Cash
                 </button>
@@ -1194,33 +1253,39 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
 
             {subview === 'expenses' && (
               expenses.length === 0 ? (
-                <div className="py-8 text-center text-xs text-[#718D83]">
-                  No business expenses logged yet. Click &ldquo;Log Business Expense&rdquo; to record vendor outlays and attach receipts.
-                </div>
+                <EmptyStateCard
+                  variant="transactions"
+                  title="No business expenses logged yet"
+                  description="Record vendor outlays, software subscriptions, rent, and attach PDF/image receipts for tax & ledger reconciliation."
+                  actionLabel="Log Business Expense"
+                  onAction={() => setShowExpenseModal(true)}
+                />
               ) : (
-                <div className="divide-y divide-[#28443C]/50 pt-2">
+                <div className="divide-y divide-[var(--fs-border)] pt-2">
                   {expenses.map(e => (
                     <div key={e.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                       <div>
-                        <div className="font-semibold text-[#F5F7F5]">{e.name}</div>
-                        <div className="text-[10px] text-[#718D83]">
+                        <div className="font-semibold text-[var(--fs-text)]">{e.name}</div>
+                        <div className="text-[10px] text-[var(--fs-text-muted)]">
                           {e.category} · {e.vendor} · {e.expenseDate} · {e.paymentMethod}
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
                         {e.receiptName && (
                           <button
+                            type="button"
                             onClick={() => handleDownloadReceipt(e)}
-                            className="rounded-lg border border-[#28443C] bg-[#0B1C19] px-2.5 py-1 text-[11px] text-[#A8E6CE] hover:border-[#72C8B0] flex items-center gap-1"
+                            className="fs-btn-secondary px-2.5 py-1 text-[11px] flex items-center gap-1"
                           >
                             <Download className="h-3 w-3" />
                             <span>Receipt</span>
                           </button>
                         )}
-                        <div className="font-bold text-[#EB7676] tabular-nums">-{formatINR(e.amount)}</div>
+                        <div className="font-mono-num font-bold text-[var(--fs-danger)] tabular-nums">-{formatINR(e.amount)}</div>
                         <button
+                          type="button"
                           onClick={() => handleDeleteExpense(e.id)}
-                          className="p-1 text-[#718D83] hover:text-[#EB7676]"
+                          className="p-1 text-[var(--fs-text-muted)] hover:text-[var(--fs-danger)]"
                           title="Delete Expense"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -1234,25 +1299,30 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
 
             {subview === 'clients' && (
               clients.length === 0 ? (
-                <div className="py-8 text-center text-xs text-[#718D83]">
-                  No clients added yet. Add a corporate client to prefill GST invoices.
-                </div>
+                <EmptyStateCard
+                  variant="clients"
+                  title="No corporate clients added yet"
+                  description="Save clients with validated 15-character GSTIN numbers to prefill invoices in one click."
+                  actionLabel="Add Client"
+                  onAction={() => setShowClientModal(true)}
+                />
               ) : (
-                <div className="divide-y divide-[#28443C]/50 pt-2">
+                <div className="divide-y divide-[var(--fs-border)] pt-2">
                   {clients.map(c => (
                     <div key={c.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                       <div>
-                        <div className="font-bold text-[#F5F7F5]">{c.companyName}</div>
-                        <div className="text-[10px] text-[#718D83]">Contact: {c.clientName} · {c.email} · {c.phone}</div>
+                        <div className="font-bold text-[var(--fs-text)]">{c.companyName}</div>
+                        <div className="text-[10px] text-[var(--fs-text-muted)]">Contact: {c.clientName} · {c.email} · {c.phone}</div>
                       </div>
                       <div className="flex items-center gap-3">
                         <div className="text-right">
-                          <div className="font-mono text-xs text-[#A8E6CE]">{c.gstin || 'Unregistered'}</div>
-                          <div className="text-[10px] text-[#718D83]">{c.billingAddress}</div>
+                          <div className="font-mono text-xs text-[var(--fs-accent)]">{c.gstin || 'Unregistered'}</div>
+                          <div className="text-[10px] text-[var(--fs-text-muted)]">{c.billingAddress}</div>
                         </div>
                         <button
+                          type="button"
                           onClick={() => handleDeleteClient(c.id)}
-                          className="p-1 text-[#718D83] hover:text-[#EB7676]"
+                          className="p-1 text-[var(--fs-text-muted)] hover:text-[var(--fs-danger)]"
                           title="Delete Client"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -1266,44 +1336,44 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
 
             {subview === 'cash-flow' && cashFlow && (
               <div className="space-y-4">
-                <div className="p-4 rounded-xl bg-[#0B1C19] border border-[#28443C] space-y-2.5 text-xs">
+                <div className="p-4 rounded-xl bg-[var(--fs-surface-2)] border border-[var(--fs-border)] space-y-2.5 text-xs">
                   <div className="flex justify-between">
-                    <span className="text-[#A7C1B8]">Opening Cash + Collected Revenue:</span>
-                    <span className="font-bold text-[#F5F7F5] tabular-nums">{formatINR(cashFlow.openingBalance)}</span>
+                    <span className="text-[var(--fs-text-body)]">Opening Cash + Collected Revenue:</span>
+                    <span className="font-mono-num font-bold text-[var(--fs-text)] tabular-nums">{formatINR(cashFlow.openingBalance)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-[#A7C1B8]">Confirmed Receivables (Unpaid Invoices):</span>
-                    <span className="font-bold text-[#55C99A] tabular-nums">+{formatINR(cashFlow.confirmedReceivables)}</span>
+                    <span className="text-[var(--fs-text-body)]">Confirmed Receivables (Unpaid Invoices):</span>
+                    <span className="font-mono-num font-bold text-[var(--fs-success)] tabular-nums">+{formatINR(cashFlow.confirmedReceivables)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-[#A7C1B8]">Committed Outflows (Expenses + Monthly EMIs):</span>
-                    <span className="font-bold text-[#EB7676] tabular-nums">-{formatINR(cashFlow.committedOutflows)}</span>
+                    <span className="text-[var(--fs-text-body)]">Committed Outflows (Expenses + Monthly EMIs):</span>
+                    <span className="font-mono-num font-bold text-[var(--fs-danger)] tabular-nums">-{formatINR(cashFlow.committedOutflows)}</span>
                   </div>
-                  <div className="flex justify-between pt-2 border-t border-[#28443C] text-sm">
-                    <span className="font-bold text-[#F5F7F5]">Projected Closing Balance:</span>
-                    <span className="font-extrabold text-[#A8E6CE] tabular-nums">{formatINR(cashFlow.projectedClosingBalance)}</span>
+                  <div className="flex justify-between pt-2 border-t border-[var(--fs-border)] text-sm">
+                    <span className="font-bold text-[var(--fs-text)]">Projected Closing Balance:</span>
+                    <span className="font-mono-num font-extrabold text-[var(--fs-accent)] tabular-nums">{formatINR(cashFlow.projectedClosingBalance)}</span>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="p-4 rounded-xl bg-[#0B1C19] border border-[#28443C]">
-                    <div className="text-[11px] text-[#718D83]">Monthly Burn Rate</div>
-                    <div className="text-lg font-bold text-[#EB7676] tabular-nums mt-1">{formatINR(cashFlow.monthlyBurnRate)}/mo</div>
+                  <div className="p-4 rounded-xl bg-[var(--fs-surface-2)] border border-[var(--fs-border)]">
+                    <div className="text-[11px] text-[var(--fs-text-muted)]">Monthly Burn Rate</div>
+                    <div className="font-mono-num text-lg font-bold text-[var(--fs-danger)] tabular-nums mt-1">{formatINR(cashFlow.monthlyBurnRate)}/mo</div>
                   </div>
-                  <div className="p-4 rounded-xl bg-[#0B1C19] border border-[#28443C]">
-                    <div className="text-[11px] text-[#718D83]">Estimated Cash Runway</div>
-                    <div className="text-lg font-bold text-[#A8E6CE] tabular-nums mt-1">
+                  <div className="p-4 rounded-xl bg-[var(--fs-surface-2)] border border-[var(--fs-border)]">
+                    <div className="text-[11px] text-[var(--fs-text-muted)]">Estimated Cash Runway</div>
+                    <div className="font-mono-num text-lg font-bold text-[var(--fs-accent)] tabular-nums mt-1">
                       {cashFlow.monthlyBurnRate > 0 ? `${cashFlow.runwayMonths} months` : 'Zero monthly burn'}
                     </div>
                   </div>
                 </div>
 
-                <div className="rounded-xl bg-[#0B1C19] border border-[#28443C] overflow-hidden">
-                  <div className="px-4 py-2.5 border-b border-[#28443C] text-xs font-bold text-[#F5F7F5]">
+                <div className="rounded-xl bg-[var(--fs-surface-2)] border border-[var(--fs-border)] overflow-hidden">
+                  <div className="px-4 py-2.5 border-b border-[var(--fs-border)] text-xs font-bold text-[var(--fs-text)]">
                     3-Month Cash Projection
                   </div>
                   <table className="w-full text-left text-xs">
-                    <thead className="text-[#718D83] border-b border-[#28443C]">
+                    <thead className="text-[var(--fs-text-muted)] border-b border-[var(--fs-border)]">
                       <tr>
                         <th className="py-2 px-4">Period</th>
                         <th className="py-2 px-4 text-right">Expected Inflow</th>
@@ -1311,13 +1381,13 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
                         <th className="py-2 px-4 text-right">Projected Closing</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#28443C]/40">
+                    <tbody className="divide-y divide-[var(--fs-border)]">
                       {cashFlow.monthlyProjection.map(row => (
                         <tr key={row.month}>
-                          <td className="py-2.5 px-4 font-semibold text-[#F5F7F5]">{row.month}</td>
-                          <td className="py-2.5 px-4 text-right tabular-nums text-[#55C99A]">+{formatINR(row.inflow)}</td>
-                          <td className="py-2.5 px-4 text-right tabular-nums text-[#EB7676]">-{formatINR(row.outflow)}</td>
-                          <td className="py-2.5 px-4 text-right font-bold tabular-nums text-[#A8E6CE]">{formatINR(row.closingBalance)}</td>
+                          <td className="py-2.5 px-4 font-semibold text-[var(--fs-text)]">{row.month}</td>
+                          <td className="py-2.5 px-4 text-right font-mono-num tabular-nums text-[var(--fs-success)]">+{formatINR(row.inflow)}</td>
+                          <td className="py-2.5 px-4 text-right font-mono-num tabular-nums text-[var(--fs-danger)]">-{formatINR(row.outflow)}</td>
+                          <td className="py-2.5 px-4 text-right font-mono-num font-bold tabular-nums text-[var(--fs-accent)]">{formatINR(row.closingBalance)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1331,49 +1401,53 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
 
       {/* Invoice PDF Preview Modal */}
       {selectedInvoiceForPdf && (
-        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
-          <div className="w-full max-w-2xl rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-6 shadow-2xl overflow-y-auto max-h-[90vh]">
-            <div className="flex items-center justify-between border-b border-[#28443C] pb-4">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl fs-card p-6 space-y-6 shadow-2xl overflow-y-auto max-h-[90vh]">
+            <div className="flex items-center justify-between border-b border-[var(--fs-border)] pb-4">
               <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-[#A8E6CE]" />
-                <h3 className="text-base font-bold text-[#F5F7F5]">Tax Invoice · {selectedInvoiceForPdf.invoiceNumber}</h3>
+                <FileText className="h-5 w-5 text-[var(--fs-accent)]" />
+                <h3 className="text-base font-bold text-[var(--fs-text)]">Tax Invoice · {selectedInvoiceForPdf.invoiceNumber}</h3>
               </div>
               <button
+                type="button"
                 onClick={() => setSelectedInvoiceForPdf(null)}
-                className="p-1 rounded-lg text-[#718D83] hover:text-[#F5F7F5]"
+                className="p-1 rounded-lg text-[var(--fs-text-muted)] hover:text-[var(--fs-text)]"
+                aria-label="Close invoice preview"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="bg-[#0B1C19] border border-[#28443C] rounded-xl p-6 space-y-4 text-xs font-mono">
-              <div className="flex justify-between border-b border-[#28443C] pb-4">
+            <div className="bg-[var(--fs-surface-2)] border border-[var(--fs-border)] rounded-xl p-6 space-y-4 text-xs font-mono">
+              <div className="flex justify-between border-b border-[var(--fs-border)] pb-4">
                 <div>
-                  <div className="text-sm font-bold text-[#A8E6CE]">{businessProfile?.businessName || 'FINSIGHT BUSINESS'}</div>
-                  <div className="text-[11px] text-[#A7C1B8]">GSTIN: {businessProfile?.gstin || 'Not Set'}</div>
-                  <div className="text-[11px] text-[#718D83]">{businessProfile?.address || 'India'}</div>
+                  <div className="text-sm font-bold text-[var(--fs-accent)]">{businessProfile?.businessName || 'FINSIGHT BUSINESS'}</div>
+                  <div className="text-[11px] text-[var(--fs-text-body)]">GSTIN: {businessProfile?.gstin || 'Not Set'}</div>
+                  <div className="text-[11px] text-[var(--fs-text-muted)]">{businessProfile?.address || 'India'}</div>
                 </div>
                 <div className="text-right">
-                  <div className="text-sm font-bold text-[#F5F7F5]">TAX INVOICE</div>
-                  <div className="text-[11px] text-[#A7C1B8]">{selectedInvoiceForPdf.invoiceNumber}</div>
-                  <div className="text-[11px] text-[#718D83]">Date: {selectedInvoiceForPdf.invoiceDate}</div>
-                  <div className="text-[11px] text-[#718D83]">Due: {selectedInvoiceForPdf.dueDate}</div>
+                  <div className="text-sm font-bold text-[var(--fs-text)]">TAX INVOICE</div>
+                  <div className="text-[11px] text-[var(--fs-text-body)]">{selectedInvoiceForPdf.invoiceNumber}</div>
+                  <div className="text-[11px] text-[var(--fs-text-muted)]">Date: {selectedInvoiceForPdf.invoiceDate}</div>
+                  <div className="text-[11px] text-[var(--fs-text-muted)]">Due: {selectedInvoiceForPdf.dueDate}</div>
                 </div>
               </div>
 
-              <div className="flex justify-between py-2 border-b border-[#28443C]">
+              <div className="flex justify-between py-2 border-b border-[var(--fs-border)]">
                 <div>
-                  <div className="text-[10px] text-[#718D83]">BILLED TO:</div>
-                  <div className="font-bold text-[#F5F7F5]">{selectedInvoiceForPdf.clientName}</div>
+                  <div className="text-[10px] text-[var(--fs-text-muted)]">BILLED TO:</div>
+                  <div className="font-bold text-[var(--fs-text)]">{selectedInvoiceForPdf.clientName}</div>
                   {selectedInvoiceForPdf.clientGstin && (
-                    <div className="text-[10px] text-[#A8E6CE]">GSTIN: {selectedInvoiceForPdf.clientGstin}</div>
+                    <div className="text-[10px] text-[var(--fs-accent)]">GSTIN: {selectedInvoiceForPdf.clientGstin}</div>
                   )}
-                  <div className="text-[10px] text-[#A7C1B8]">{selectedInvoiceForPdf.placeOfSupply}</div>
+                  <div className="text-[10px] text-[var(--fs-text-body)]">{selectedInvoiceForPdf.placeOfSupply}</div>
                 </div>
                 <div className="text-right">
-                  <div className="text-[10px] text-[#718D83]">PAYMENT STATUS:</div>
+                  <div className="text-[10px] text-[var(--fs-text-muted)]">PAYMENT STATUS:</div>
                   <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                    selectedInvoiceForPdf.status === 'PAID' ? 'bg-[#55C99A]/20 text-[#55C99A]' : 'bg-[#E5B764]/20 text-[#E5B764]'
+                    selectedInvoiceForPdf.status === 'PAID'
+                      ? 'bg-[var(--fs-success)]/15 text-[var(--fs-success)]'
+                      : 'bg-[var(--fs-warning)]/15 text-[var(--fs-warning)]'
                   }`}>
                     {selectedInvoiceForPdf.status}
                   </span>
@@ -1381,7 +1455,7 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
               </div>
 
               <table className="w-full text-left">
-                <thead className="text-[#718D83] border-b border-[#28443C]">
+                <thead className="text-[var(--fs-text-muted)] border-b border-[var(--fs-border)]">
                   <tr>
                     <th className="py-2">Item Description</th>
                     <th className="py-2 text-center">Qty</th>
@@ -1390,47 +1464,47 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
                     <th className="py-2 text-right">Amount</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#28443C]/40">
+                <tbody className="divide-y divide-[var(--fs-border)]">
                   {selectedInvoiceForPdf.lineItems.map(item => (
                     <tr key={item.id}>
-                      <td className="py-2.5 text-[#F5F7F5]">{item.description}</td>
-                      <td className="py-2.5 text-center text-[#A7C1B8]">{item.quantity}</td>
-                      <td className="py-2.5 text-center text-[#A7C1B8]">{item.taxRate}%</td>
-                      <td className="py-2.5 text-right text-[#A7C1B8]">₹{item.unitPrice.toLocaleString('en-IN')}</td>
-                      <td className="py-2.5 text-right text-[#F5F7F5]">₹{item.lineTotal.toLocaleString('en-IN')}</td>
+                      <td className="py-2.5 text-[var(--fs-text)]">{item.description}</td>
+                      <td className="py-2.5 text-center text-[var(--fs-text-body)]">{item.quantity}</td>
+                      <td className="py-2.5 text-center text-[var(--fs-text-body)]">{item.taxRate}%</td>
+                      <td className="py-2.5 text-right text-[var(--fs-text-body)]">₹{item.unitPrice.toLocaleString('en-IN')}</td>
+                      <td className="py-2.5 text-right text-[var(--fs-text)]">₹{item.lineTotal.toLocaleString('en-IN')}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
 
-              <div className="border-t border-[#28443C] pt-3 space-y-1 text-right">
-                <div className="flex justify-between text-[#A7C1B8]">
+              <div className="border-t border-[var(--fs-border)] pt-3 space-y-1 text-right">
+                <div className="flex justify-between text-[var(--fs-text-body)]">
                   <span>Subtotal:</span>
                   <span>{formatINR(selectedInvoiceForPdf.subtotal)}</span>
                 </div>
                 {selectedInvoiceForPdf.cgst > 0 && (
-                  <div className="flex justify-between text-[#A7C1B8]">
+                  <div className="flex justify-between text-[var(--fs-text-body)]">
                     <span>CGST:</span>
                     <span>{formatINR(selectedInvoiceForPdf.cgst)}</span>
                   </div>
                 )}
                 {selectedInvoiceForPdf.sgst > 0 && (
-                  <div className="flex justify-between text-[#A7C1B8]">
+                  <div className="flex justify-between text-[var(--fs-text-body)]">
                     <span>SGST:</span>
                     <span>{formatINR(selectedInvoiceForPdf.sgst)}</span>
                   </div>
                 )}
                 {selectedInvoiceForPdf.igst > 0 && (
-                  <div className="flex justify-between text-[#A7C1B8]">
+                  <div className="flex justify-between text-[var(--fs-text-body)]">
                     <span>IGST:</span>
                     <span>{formatINR(selectedInvoiceForPdf.igst)}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-sm font-bold text-[#A8E6CE] border-t border-[#28443C] pt-2">
+                <div className="flex justify-between text-sm font-bold text-[var(--fs-accent)] border-t border-[var(--fs-border)] pt-2">
                   <span>Grand Total (INR):</span>
                   <span>{formatINR(selectedInvoiceForPdf.total)}</span>
                 </div>
-                <div className="flex justify-between text-xs text-[#A7C1B8]">
+                <div className="flex justify-between text-xs text-[var(--fs-text-body)]">
                   <span>Balance Due:</span>
                   <span>{formatINR(selectedInvoiceForPdf.balanceDue)}</span>
                 </div>
@@ -1439,22 +1513,25 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
 
             <div className="flex flex-wrap justify-end gap-2 pt-2">
               <button
+                type="button"
                 onClick={() => setSelectedInvoiceForPdf(null)}
-                className="rounded-xl border border-[#28443C] px-4 py-2 text-xs text-[#718D83]"
+                className="fs-btn-secondary px-4 py-2 text-xs"
               >
                 Close Preview
               </button>
               <button
+                type="button"
                 onClick={() => window.print()}
-                className="rounded-xl border border-[#28443C] bg-[#16352E] px-4 py-2 text-xs font-semibold text-[#A8E6CE] flex items-center gap-1.5"
+                className="fs-btn-secondary px-4 py-2 text-xs flex items-center gap-1.5"
               >
                 <Printer className="h-3.5 w-3.5" />
                 <span>Print View</span>
               </button>
               <button
+                type="button"
                 onClick={() => handleDownloadInvoicePdf(selectedInvoiceForPdf)}
                 disabled={isDownloadingPdfId === selectedInvoiceForPdf.id}
-                className="rounded-xl bg-[#A8E6CE] px-4 py-2 text-xs font-bold text-[#0B1C19] flex items-center gap-1.5 hover:bg-[#72C8B0] disabled:opacity-50"
+                className="fs-btn-primary px-4 py-2 text-xs flex items-center gap-1.5 disabled:opacity-50"
               >
                 <Download className="h-3.5 w-3.5" />
                 <span>{isDownloadingPdfId === selectedInvoiceForPdf.id ? 'Generating PDF...' : 'Download PDF'}</span>
@@ -1466,14 +1543,14 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
 
       {/* Record Payment Modal */}
       {paymentModalInvoice && (
-        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
-          <div className="w-full max-w-sm rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-4 shadow-2xl">
-            <h3 className="text-base font-bold text-[#F5F7F5]">Record Payment · {paymentModalInvoice.invoiceNumber}</h3>
-            <p className="text-xs text-[#A7C1B8]">
-              Outstanding balance: <strong className="text-[#E5B764]">{formatINR(paymentModalInvoice.balanceDue)}</strong>
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-sm fs-card p-6 space-y-4 shadow-2xl">
+            <h3 className="text-base font-bold text-[var(--fs-text)]">Record Payment · {paymentModalInvoice.invoiceNumber}</h3>
+            <p className="text-xs text-[var(--fs-text-body)]">
+              Outstanding balance: <strong className="text-[var(--fs-warning)]">{formatINR(paymentModalInvoice.balanceDue)}</strong>
             </p>
             <div>
-              <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Payment Amount (₹)</label>
+              <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Payment Amount (₹)</label>
               <input
                 type="number"
                 step="0.01"
@@ -1481,19 +1558,21 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
                 max={paymentModalInvoice.balanceDue}
                 value={paymentAmountInput}
                 onChange={e => setPaymentAmountInput(e.target.value)}
-                className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                className="fs-input"
               />
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <button
+                type="button"
                 onClick={() => setPaymentModalInvoice(null)}
-                className="rounded-xl border border-[#28443C] px-4 py-2 text-xs text-[#718D83]"
+                className="fs-btn-secondary px-4 py-2 text-xs"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={() => handleRecordPayment(paymentModalInvoice.id, parseFloat(paymentAmountInput) || 0)}
-                className="rounded-xl bg-[#A8E6CE] px-4 py-2 text-xs font-bold text-[#0B1C19]"
+                className="fs-btn-primary px-4 py-2 text-xs"
               >
                 Save Payment
               </button>
@@ -1504,73 +1583,73 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
 
       {/* Business Profile Modal */}
       {showProfileModal && (
-        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-4 shadow-2xl">
-            <h3 className="text-base font-bold text-[#F5F7F5]">Business Profile & Cash Balance</h3>
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-md fs-card p-6 space-y-4 shadow-2xl">
+            <h3 className="text-base font-bold text-[var(--fs-text)]">Business Profile & Cash Balance</h3>
             <form onSubmit={handleSaveBusinessProfile} className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Registered Business Name</label>
+                <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Registered Business Name</label>
                 <input
                   type="text"
                   value={profileName}
                   onChange={e => setProfileName(e.target.value)}
-                  className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                  className="fs-input"
                   required
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Business GSTIN</label>
+                  <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Business GSTIN</label>
                   <input
                     type="text"
                     value={profileGstin}
                     onChange={e => setProfileGstin(e.target.value.toUpperCase())}
                     placeholder="29AAACF9876K1ZP"
-                    className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5] font-mono"
+                    className="fs-input font-mono"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#A7C1B8] mb-1">State GST Code</label>
+                  <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">State GST Code</label>
                   <input
                     type="text"
                     value={profileStateCode}
                     onChange={e => setProfileStateCode(e.target.value)}
                     placeholder="29"
                     maxLength={2}
-                    className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5] font-mono"
+                    className="fs-input font-mono"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Registered Address</label>
+                <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Registered Address</label>
                 <input
                   type="text"
                   value={profileAddress}
                   onChange={e => setProfileAddress(e.target.value)}
-                  className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                  className="fs-input"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Opening Cash Balance (₹)</label>
+                <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Opening Cash Balance (₹)</label>
                 <input
                   type="number"
                   min="0"
                   value={profileOpeningCash}
                   onChange={e => setProfileOpeningCash(e.target.value)}
-                  className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                  className="fs-input"
                 />
               </div>
-              <div className="flex justify-end gap-2 pt-3 border-t border-[#28443C]">
+              <div className="flex justify-end gap-2 pt-3 border-t border-[var(--fs-border)]">
                 <button
                   type="button"
                   onClick={() => setShowProfileModal(false)}
-                  className="rounded-xl border border-[#28443C] px-4 py-2 text-xs text-[#718D83]"
+                  className="fs-btn-secondary px-4 py-2 text-xs"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="rounded-xl bg-[#A8E6CE] px-4 py-2 text-xs font-bold text-[#0B1C19]"
+                  className="fs-btn-primary px-4 py-2 text-xs"
                 >
                   Save Profile
                 </button>
@@ -1582,28 +1661,28 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
 
       {/* Add Business Expense Modal */}
       {showExpenseModal && (
-        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-4 shadow-2xl">
-            <h3 className="text-base font-bold text-[#F5F7F5]">Log Business Expense</h3>
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-md fs-card p-6 space-y-4 shadow-2xl">
+            <h3 className="text-base font-bold text-[var(--fs-text)]">Log Business Expense</h3>
             <form onSubmit={handleAddExpense} className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Expense Title</label>
+                <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Expense Title</label>
                 <input
                   type="text"
                   value={expName}
                   onChange={e => setExpName(e.target.value)}
                   placeholder="e.g. Cloud Hosting Subscription"
-                  className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                  className="fs-input"
                   required
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Category</label>
+                  <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Category</label>
                   <select
                     value={expCategory}
                     onChange={e => setExpCategory(e.target.value as BusinessExpense['category'])}
-                    className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                    className="fs-input"
                   >
                     {['Rent', 'Salaries', 'Marketing', 'Utilities', 'Equipment', 'Travel', 'Software', 'Other'].map(cat => (
                       <option key={cat} value={cat}>{cat}</option>
@@ -1611,7 +1690,7 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Amount (₹)</label>
+                  <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Amount (₹)</label>
                   <input
                     type="number"
                     min="1"
@@ -1619,45 +1698,45 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
                     value={expAmount}
                     onChange={e => setExpAmount(e.target.value)}
                     placeholder="12500"
-                    className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                    className="fs-input"
                     required
                   />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Vendor</label>
+                  <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Vendor</label>
                   <input
                     type="text"
                     value={expVendor}
                     onChange={e => setExpVendor(e.target.value)}
                     placeholder="e.g. Google Cloud India"
-                    className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                    className="fs-input"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Expense Date</label>
+                  <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Expense Date</label>
                   <input
                     type="date"
                     value={expDate}
                     onChange={e => setExpDate(e.target.value)}
-                    className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                    className="fs-input"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Payment Method</label>
+                <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Payment Method</label>
                 <input
                   type="text"
                   value={expMethod}
                   onChange={e => setExpMethod(e.target.value)}
-                  className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                  className="fs-input"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Attach Receipt (PDF/PNG/JPG, Optional)</label>
-                <label className="flex items-center gap-2 rounded-xl bg-[#0B1C19] border border-dashed border-[#28443C] px-3 py-2 text-xs text-[#A7C1B8] cursor-pointer hover:border-[#72C8B0]">
-                  <Upload className="h-3.5 w-3.5 text-[#A8E6CE]" />
+                <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Attach Receipt (PDF/PNG/JPG, Optional)</label>
+                <label className="flex items-center gap-2 rounded-xl bg-[var(--fs-bg)] border border-dashed border-[var(--fs-border)] px-3 py-2 text-xs text-[var(--fs-text-body)] cursor-pointer hover:border-[var(--fs-accent)]">
+                  <Upload className="h-3.5 w-3.5 text-[var(--fs-accent)]" />
                   <span className="truncate">{expReceipt ? expReceipt.fileName : 'Choose receipt file...'}</span>
                   <input
                     type="file"
@@ -1667,20 +1746,20 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
                   />
                 </label>
               </div>
-              <div className="flex justify-end gap-2 pt-3 border-t border-[#28443C]">
+              <div className="flex justify-end gap-2 pt-3 border-t border-[var(--fs-border)]">
                 <button
                   type="button"
                   onClick={() => {
                     setShowExpenseModal(false);
                     setExpReceipt(null);
                   }}
-                  className="rounded-xl border border-[#28443C] px-4 py-2 text-xs text-[#718D83]"
+                  className="fs-btn-secondary px-4 py-2 text-xs"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="rounded-xl bg-[#A8E6CE] px-4 py-2 text-xs font-bold text-[#0B1C19]"
+                  className="fs-btn-primary px-4 py-2 text-xs"
                 >
                   Save Expense
                 </button>
@@ -1692,84 +1771,84 @@ export const BusinessModule: React.FC<BusinessModuleProps> = ({
 
       {/* Add Client Modal */}
       {showClientModal && (
-        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-4 shadow-2xl">
-            <h3 className="text-base font-bold text-[#F5F7F5]">Add Corporate Client</h3>
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-md fs-card p-6 space-y-4 shadow-2xl">
+            <h3 className="text-base font-bold text-[var(--fs-text)]">Add Corporate Client</h3>
             <form onSubmit={handleAddClient} className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Company / Business Name</label>
+                <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Company / Business Name</label>
                 <input
                   type="text"
                   value={newCompanyName}
                   onChange={e => setNewCompanyName(e.target.value)}
                   placeholder="e.g. Acme Tech Solutions Pvt Ltd"
-                  className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                  className="fs-input"
                   required
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Contact Person Name</label>
+                <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Contact Person Name</label>
                 <input
                   type="text"
                   value={newClientName}
                   onChange={e => setNewClientName(e.target.value)}
                   placeholder="e.g. Priya Nair"
-                  className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                  className="fs-input"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Email</label>
+                  <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Email</label>
                   <input
                     type="email"
                     value={newClientEmail}
                     onChange={e => setNewClientEmail(e.target.value)}
                     placeholder="finance@acme.in"
-                    className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                    className="fs-input"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Phone</label>
+                  <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Phone</label>
                   <input
                     type="text"
                     value={newClientPhone}
                     onChange={e => setNewClientPhone(e.target.value)}
                     placeholder="+91 98765 00000"
-                    className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                    className="fs-input"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#A7C1B8] mb-1">GSTIN Number (Optional, 15 chars)</label>
+                <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">GSTIN Number (Optional, 15 chars)</label>
                 <input
                   type="text"
                   value={newClientGstin}
                   onChange={e => setNewClientGstin(e.target.value.toUpperCase())}
                   placeholder="e.g. 29AABCC1234D1Z5"
-                  className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5] font-mono"
+                  className="fs-input font-mono"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Billing Address</label>
+                <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Billing Address</label>
                 <input
                   type="text"
                   value={newClientAddress}
                   onChange={e => setNewClientAddress(e.target.value)}
                   placeholder="e.g. Whitefield, Bangalore, Karnataka"
-                  className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                  className="fs-input"
                 />
               </div>
-              <div className="flex justify-end gap-2 pt-3 border-t border-[#28443C]">
+              <div className="flex justify-end gap-2 pt-3 border-t border-[var(--fs-border)]">
                 <button
                   type="button"
                   onClick={() => setShowClientModal(false)}
-                  className="rounded-xl border border-[#28443C] px-4 py-2 text-xs text-[#718D83]"
+                  className="fs-btn-secondary px-4 py-2 text-xs"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="rounded-xl bg-[#A8E6CE] px-4 py-2 text-xs font-bold text-[#0B1C19]"
+                  className="fs-btn-primary px-4 py-2 text-xs"
                 >
                   Save Client
                 </button>

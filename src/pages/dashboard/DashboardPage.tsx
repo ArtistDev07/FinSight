@@ -11,11 +11,27 @@ import {
   AlertCircle,
   Loader2,
   RefreshCw,
+  Calendar,
+  Target,
+  Activity,
+  CheckCircle2,
+  Sun,
+  Moon,
+  Inbox,
 } from 'lucide-react';
 import { formatINR } from '../../utils/financialMath';
 import { useAuth } from '../../contexts/AuthContext';
-import { Transaction } from '../../types';
+import { useTheme } from '../../contexts/ThemeContext';
+import { useTranslations } from '../../utils/i18n';
+import {
+  Transaction,
+  MoneyCalendarEvent,
+  MoneyGoal,
+  FinancialHealthSnapshot,
+} from '../../types';
 import { apiFetch, parseApiResponse } from '../../utils/api';
+import { CashFlowTrendChart } from '../../components/charts/FinSightCharts';
+import { EmptyStateCard } from '../../components/brand/FinSightArtwork';
 
 interface DashboardPageProps {
   onNavigate: (path: string) => void;
@@ -35,6 +51,8 @@ interface DashboardSummaryData {
     investedAmount: number;
     unrealizedGain: number;
     transactionCount: number;
+    needsReviewCount?: number;
+    excludedTransfersCount?: number;
   };
   recentTransactions: Transaction[];
 }
@@ -45,6 +63,7 @@ interface CashFlowData {
   surplus: number;
   allocatedBudget: number;
   remainingBudget: number;
+  monthlySeries?: Array<{ month: string; income: number; expenses: number }>;
 }
 
 interface SpendingData {
@@ -59,16 +78,38 @@ interface InsightItem {
   tone: 'positive' | 'warning' | 'info';
 }
 
+interface RiskSummary {
+  totalValue: number;
+  totalCost: number;
+  topHoldingConcentrationPct: number;
+  topAssetClass: string;
+  topAssetClassPct: number;
+  estimatedAnnualVolatilityPct: number;
+  tenPctShockImpact: number;
+  classBreakdown: Array<{ assetType: string; value: number; sharePct: number }>;
+}
+
 export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, onOpenAI }) => {
   const { user, preferences } = useAuth();
+  const { theme, toggleTheme } = useTheme();
+  const t = useTranslations(preferences?.language);
+
   const [summary, setSummary] = useState<DashboardSummaryData | null>(null);
   const [cashFlow, setCashFlow] = useState<CashFlowData | null>(null);
   const [spending, setSpending] = useState<SpendingData | null>(null);
   const [insights, setInsights] = useState<InsightItem[]>([]);
+  const [health, setHealth] = useState<FinancialHealthSnapshot | null>(null);
+  const [events, setEvents] = useState<MoneyCalendarEvent[]>([]);
+  const [goals, setGoals] = useState<MoneyGoal[]>([]);
+  const [risk, setRisk] = useState<RiskSummary | null>(null);
+
+  const [timeframe, setTimeframe] = useState<'7d' | '30d' | '3m' | '6m' | '1y'>('6m');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [aiInsight, setAiInsight] = useState<string | null>(null);
+  const [monthlyReview, setMonthlyReview] = useState<string | null>(null);
+  const [reviewCompleted, setReviewCompleted] = useState(false);
+  const [reviewDismissed, setReviewDismissed] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
 
@@ -76,18 +117,26 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, onOpen
     setLoading(true);
     setError(null);
     try {
-      const [sumRes, cfRes, spRes, insRes] = await Promise.all([
+      const [sumRes, cfRes, spRes, insRes, fhRes, calRes, goalRes, riskRes] = await Promise.all([
         apiFetch('/api/v1/dashboard/summary'),
         apiFetch('/api/v1/dashboard/cash-flow'),
         apiFetch('/api/v1/dashboard/spending'),
         apiFetch('/api/v1/dashboard/insights'),
+        apiFetch('/api/v1/financial-health/summary'),
+        apiFetch('/api/v1/calendar/events'),
+        apiFetch('/api/v1/goals'),
+        apiFetch('/api/v1/investments/risk'),
       ]);
 
-      const [sumJson, cfJson, spJson, insJson] = await Promise.all([
+      const [sumJson, cfJson, spJson, insJson, fhJson, calJson, goalJson, riskJson] = await Promise.all([
         sumRes.json(),
         cfRes.json(),
         spRes.json(),
         insRes.json(),
+        fhRes.json(),
+        calRes.json(),
+        goalRes.json(),
+        riskRes.json(),
       ]);
 
       if (!sumRes.ok || !sumJson.success) {
@@ -98,6 +147,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, onOpen
       if (cfJson.success) setCashFlow(cfJson.data);
       if (spJson.success) setSpending(spJson.data);
       if (insJson.success) setInsights(insJson.data || []);
+      if (fhJson.success && fhJson.data) setHealth(fhJson.data);
+      if (calJson.success) setEvents(calJson.data || []);
+      if (goalJson.success) setGoals(goalJson.data || []);
+      if (riskJson.success) setRisk(riskJson.data || null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load dashboard data.');
     } finally {
@@ -109,25 +162,24 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, onOpen
     loadDashboard();
   }, [loadDashboard]);
 
-  const handleRequestAiInsight = async () => {
+  const handleGenerateMonthlyReview = async () => {
     setAiLoading(true);
     setAiError(null);
+    setReviewDismissed(false);
+    setReviewCompleted(false);
     try {
-      const res = await apiFetch('/api/v1/ai/module-insight', {
+      const res = await apiFetch('/api/v1/ai/monthly-review', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          module: 'Dashboard Overview',
-          question: 'Summarize my current income, expense ratio, savings rate, and portfolio standing with 3 practical next steps.',
-        }),
+        body: JSON.stringify({}),
       });
-      const parsed = await parseApiResponse<{ success: boolean; data?: { insight?: string } }>(res);
-      if (!parsed.ok || !parsed.json?.data?.insight) {
-        throw new Error(parsed.errorMessage || 'Gemini AI insight unavailable.');
+      const parsed = await parseApiResponse<{ success: boolean; data?: { review?: string } }>(res);
+      if (!parsed.ok || !parsed.json?.data?.review) {
+        throw new Error(parsed.errorMessage || 'Gemini Monthly Review unavailable.');
       }
-      setAiInsight(parsed.json.data.insight);
+      setMonthlyReview(parsed.json.data.review);
     } catch (err) {
-      setAiError(err instanceof Error ? err.message : 'Failed to generate AI insight.');
+      setAiError(err instanceof Error ? err.message : 'Failed to generate Monthly Money Review.');
     } finally {
       setAiLoading(false);
     }
@@ -151,54 +203,83 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, onOpen
     investedAmount: 0,
     unrealizedGain: 0,
     transactionCount: 0,
+    needsReviewCount: 0,
+    excludedTransfersCount: 0,
   };
 
-  const inflow = cashFlow?.inflow ?? m.totalIncome;
-  const outflow = cashFlow?.outflow ?? m.totalExpenses;
-  const surplus = cashFlow?.surplus ?? m.savings;
-  const maxBar = Math.max(inflow, outflow, Math.abs(surplus), 1);
-  const outflowPct = Math.min(100, Math.round((outflow / maxBar) * 100));
-  const surplusPct = surplus > 0 ? Math.min(100, Math.round((surplus / maxBar) * 100)) : 0;
+  const rawSeries = cashFlow?.monthlySeries || [];
+  const sliceCount = timeframe === '7d' || timeframe === '30d' ? 2 : timeframe === '3m' ? 3 : timeframe === '6m' ? 6 : 12;
+  const chartSeries = rawSeries.slice(-sliceCount).map(pt => ({
+    label: pt.month,
+    inflow: pt.income,
+    outflow: pt.expenses,
+    net: pt.income - pt.expenses,
+  }));
+
+  const upcomingCommitments = [...events]
+    .filter(e => e.status !== 'PAID')
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+    .slice(0, 4);
+
+  const activeGoalsList = goals.filter(g => g.status !== 'PAUSED').slice(0, 4);
 
   return (
-    <div className="p-6 md:p-8 space-y-8 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#28443C] pb-6">
+    <div className="p-5 md:p-8 space-y-6 max-w-7xl mx-auto">
+      {/* 1. Header Bar */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-[var(--fs-border)] pb-5">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#F5F7F5] tracking-tight">
-            Welcome, {user?.fullName?.split(' ')[0] || 'Member'}
+          <h1 className="font-display text-2xl sm:text-3xl font-extrabold text-[var(--fs-text)] tracking-tight">
+            {t.greetingMorning}, {user?.fullName?.split(' ')[0] || 'Member'}
           </h1>
-          <p className="text-xs text-[#A7C1B8] mt-1">
-            Financial Year {preferences?.financialYear || '2025-26'} · Asia/Kolkata · Updated {currentDate}
+          <p className="text-xs text-[var(--fs-text-body)] mt-1">
+            {t.greetingSubtitle} · FY {preferences?.financialYear || '2025-26'} · {preferences?.currency || 'INR'} · Updated {currentDate}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={() => onNavigate('/app/budgeting/import')}
-            className="flex items-center gap-1.5 rounded-lg bg-[#16352E] border border-[#28443C] px-3.5 py-2 text-xs font-semibold text-[#A8E6CE] hover:border-[#72C8B0] transition-colors whitespace-nowrap shrink-0"
+            type="button"
+            onClick={toggleTheme}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--fs-border)] bg-[var(--fs-surface)] px-3 py-2 text-xs font-medium text-[var(--fs-text-body)] hover:bg-[var(--fs-surface-2)] transition-colors"
           >
-            <Upload className="h-3.5 w-3.5" />
-            <span>Import Statement</span>
+            {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+            <span>{theme === 'dark' ? t.darkTheme : t.lightTheme}</span>
           </button>
           <button
+            type="button"
+            onClick={onOpenAI}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--fs-border)] bg-[var(--fs-surface)] px-3 py-2 text-xs font-semibold text-[var(--fs-brand)] hover:bg-[var(--fs-surface-2)] transition-colors"
+          >
+            <Sparkles className="h-3.5 w-3.5 text-[var(--fs-accent)]" />
+            <span>{t.askFinSightAI}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigate('/app/budgeting/import')}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--fs-border)] bg-[var(--fs-surface)] px-3.5 py-2 text-xs font-semibold text-[var(--fs-text)] hover:bg-[var(--fs-surface-2)] transition-colors whitespace-nowrap"
+          >
+            <Upload className="h-3.5 w-3.5" />
+            <span>{t.importStatement}</span>
+          </button>
+          <button
+            type="button"
             onClick={() => onNavigate('/app/budgeting/transactions')}
-            className="flex items-center gap-1.5 rounded-lg bg-[#A8E6CE] px-3.5 py-2 text-xs font-semibold text-[#0B1C19] hover:bg-[#72C8B0] transition-colors whitespace-nowrap shrink-0"
+            className="fs-btn-primary inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold whitespace-nowrap"
           >
             <Plus className="h-3.5 w-3.5" />
-            <span>Add Transaction</span>
+            <span>{t.addTransaction}</span>
           </button>
         </div>
       </div>
 
       {error && (
-        <div className="rounded-xl border border-[#EB7676]/40 bg-[#EB7676]/10 p-4 flex items-center justify-between text-xs text-[#EB7676]">
+        <div className="rounded-xl border border-[var(--fs-danger)]/40 bg-[var(--fs-danger)]/10 p-4 flex items-center justify-between text-xs text-[var(--fs-danger)]">
           <div className="flex items-center gap-2">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>{error}</span>
           </div>
           <button
             onClick={loadDashboard}
-            className="flex items-center gap-1 rounded-lg border border-[#EB7676]/40 px-3 py-1 font-semibold hover:bg-[#EB7676]/20"
+            className="flex items-center gap-1 rounded-lg border border-[var(--fs-danger)]/40 px-3 py-1 font-semibold"
           >
             <RefreshCw className="h-3 w-3" />
             <span>Retry</span>
@@ -206,319 +287,462 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, onOpen
         </div>
       )}
 
-      {/* Four Key Financial Metrics */}
+      {/* 2. Top Financial Snapshot (4 Cards) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-5 space-y-3">
-          <div className="flex items-center justify-between text-xs text-[#718D83]">
-            <span>Total Recorded Income</span>
-            <span className="p-1.5 rounded-lg bg-[#16352E] text-[#55C99A]">
-              <ArrowUpRight className="h-4 w-4" />
-            </span>
-          </div>
-          <div className="text-2xl font-bold text-[#F5F7F5] tabular-nums">
-            {loading ? '...' : formatINR(m.totalIncome)}
-          </div>
-          <div className="text-[11px] text-[#718D83]">
-            From {m.transactionCount} tracked transaction{m.transactionCount === 1 ? '' : 's'}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-5 space-y-3">
-          <div className="flex items-center justify-between text-xs text-[#718D83]">
-            <span>Total Expenses</span>
-            <span className="p-1.5 rounded-lg bg-[#16352E] text-[#EB7676]">
-              <ArrowDownRight className="h-4 w-4" />
-            </span>
-          </div>
-          <div className="text-2xl font-bold text-[#F5F7F5] tabular-nums">
-            {loading ? '...' : formatINR(m.totalExpenses)}
-          </div>
-          <div className="text-[11px] text-[#A7C1B8]">
-            {m.allocatedBudget > 0
-              ? `${Math.min(999, Math.round((m.totalExpenses / m.allocatedBudget) * 100))}% of allocated budget`
-              : `${m.activeGoals} active budget${m.activeGoals === 1 ? '' : 's'}`}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-5 space-y-3">
-          <div className="flex items-center justify-between text-xs text-[#718D83]">
-            <span>Net Monthly Savings</span>
-            <span className="p-1.5 rounded-lg bg-[#16352E] text-[#A8E6CE]">
+        <button
+          type="button"
+          onClick={() => onNavigate('/app/financial-health')}
+          className="fs-card p-5 space-y-2.5 text-left hover:border-[var(--fs-accent)] transition-colors"
+        >
+          <div className="flex items-center justify-between text-xs text-[var(--fs-text-muted)]">
+            <span>{t.netWorth}</span>
+            <span className="p-1.5 rounded-lg bg-[var(--fs-surface-2)] text-[var(--fs-accent)]">
               <Wallet className="h-4 w-4" />
             </span>
           </div>
-          <div className={`text-2xl font-bold tabular-nums ${m.savings >= 0 ? 'text-[#A8E6CE]' : 'text-[#EB7676]'}`}>
-            {loading ? '...' : formatINR(m.savings)}
+          <div className="font-mono-num text-2xl font-bold text-[var(--fs-text)]">
+            {loading ? '...' : formatINR(health?.estimatedNetWorth ?? m.portfolioValue + m.savings)}
           </div>
-          <div className="text-[11px] text-[#A7C1B8]">
-            Savings rate: {loading ? '...' : `${m.savingsRate}%`}
+          <div className="text-[11px] text-[var(--fs-text-body)]">
+            Assets {formatINR(health?.totalAssets ?? m.portfolioValue)} · Debt {formatINR(health?.totalLiabilities ?? 0)}
+          </div>
+        </button>
+
+        <div className="fs-card p-5 space-y-2.5">
+          <div className="flex items-center justify-between text-xs text-[var(--fs-text-muted)]">
+            <span>{t.monthlyIncome} / Outflow</span>
+            <span className="p-1.5 rounded-lg bg-[var(--fs-surface-2)] text-[var(--fs-success)]">
+              <ArrowUpRight className="h-4 w-4" />
+            </span>
+          </div>
+          <div className="font-mono-num text-2xl font-bold text-[var(--fs-text)]">
+            {loading ? '...' : formatINR(cashFlow?.inflow ?? m.totalIncome)}
+          </div>
+          <div className="text-[11px] text-[var(--fs-text-body)] flex items-center gap-1">
+            <ArrowDownRight className="h-3 w-3 text-[var(--fs-danger)]" />
+            <span>Spent {formatINR(cashFlow?.outflow ?? m.totalExpenses)} ({m.transactionCount} txns)</span>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-5 space-y-3">
-          <div className="flex items-center justify-between text-xs text-[#718D83]">
-            <span>Portfolio Value</span>
-            <span className="p-1.5 rounded-lg bg-[#16352E] text-[#7BB9DC]">
+        <div className="fs-card p-5 space-y-2.5">
+          <div className="flex items-center justify-between text-xs text-[var(--fs-text-muted)]">
+            <span>Net Surplus & Savings Rate</span>
+            <span className="p-1.5 rounded-lg bg-[var(--fs-surface-2)] text-[var(--fs-info)]">
               <TrendingUp className="h-4 w-4" />
             </span>
           </div>
-          <div className="text-2xl font-bold text-[#F5F7F5] tabular-nums">
-            {loading ? '...' : formatINR(m.portfolioValue)}
+          <div className={`font-mono-num text-2xl font-bold ${m.savings >= 0 ? 'text-[var(--fs-success)]' : 'text-[var(--fs-danger)]'}`}>
+            {loading ? '...' : formatINR(cashFlow?.surplus ?? m.savings)}
           </div>
-          <div className={`text-[11px] ${m.unrealizedGain >= 0 ? 'text-[#55C99A]' : 'text-[#EB7676]'}`}>
-            Unrealized {m.unrealizedGain >= 0 ? 'gain' : 'loss'}: {loading ? '...' : formatINR(m.unrealizedGain)}
+          <div className="text-[11px] text-[var(--fs-text-body)]">
+            Savings rate: <strong className="font-mono-num">{loading ? '...' : `${m.savingsRate}%`}</strong>
+            {(m.excludedTransfersCount ?? 0) > 0 && ` · ${m.excludedTransfersCount} transfer excluded`}
           </div>
         </div>
+
+        <button
+          type="button"
+          onClick={() => onNavigate('/app/financial-health')}
+          className="fs-card p-5 space-y-2.5 text-left hover:border-[var(--fs-accent)] transition-colors"
+        >
+          <div className="flex items-center justify-between text-xs text-[var(--fs-text-muted)]">
+            <span>{t.financialHealth} Index</span>
+            <span className="p-1.5 rounded-lg bg-[var(--fs-surface-2)] text-[var(--fs-accent)]">
+              <Activity className="h-4 w-4" />
+            </span>
+          </div>
+          <div className="font-mono-num text-2xl font-bold text-[var(--fs-text)]">
+            {loading ? '...' : `${health?.compositeIndex ?? 0}/100`}
+          </div>
+          <div className="text-[11px] text-[var(--fs-text-body)]">
+            Emergency runway: <strong className="font-mono-num">{health?.emergencyFundCoverageMonths ?? 0} mo</strong>
+          </div>
+        </button>
       </div>
 
-      {/* Cash Flow & Spending Breakdown */}
+      {/* 3. Cash Flow Timeline + 4. Coming Up Commitments */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-7 rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-6">
-          <div className="flex items-center justify-between">
+        <div className="lg:col-span-7 fs-card p-6 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
-              <h2 className="text-base font-bold text-[#F5F7F5]">Your Cash Flow</h2>
-              <p className="text-xs text-[#718D83]">Live inflow vs outflow from your recorded transactions</p>
+              <h2 className="font-display text-base font-bold text-[var(--fs-text)]">{t.moneyInMotion}</h2>
+              <p className="text-xs text-[var(--fs-text-muted)]">
+                Inflow vs outflow timeline (internal transfers & card settlements excluded)
+              </p>
             </div>
-            <button
-              onClick={() => onNavigate('/app/budgeting/insights')}
-              className="text-xs font-semibold text-[#A8E6CE] hover:underline"
-            >
-              Detailed Insights →
-            </button>
-          </div>
-
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-xs">
-                <span className="text-[#A7C1B8]">Total Inflow (Income)</span>
-                <span className="font-semibold text-[#55C99A] tabular-nums">{formatINR(inflow)}</span>
-              </div>
-              <div className="h-3 w-full rounded-full bg-[#0B1C19] overflow-hidden">
-                <div className="h-full bg-[#55C99A] rounded-full transition-all" style={{ width: inflow > 0 ? `${Math.round((inflow / maxBar) * 100)}%` : '0%' }} />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-xs">
-                <span className="text-[#A7C1B8]">Total Outflow (Expenses)</span>
-                <span className="font-semibold text-[#EB7676] tabular-nums">{formatINR(outflow)}</span>
-              </div>
-              <div className="h-3 w-full rounded-full bg-[#0B1C19] overflow-hidden">
-                <div className="h-full bg-[#EB7676] rounded-full transition-all" style={{ width: `${outflowPct}%` }} />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-xs">
-                <span className="text-[#A7C1B8]">Net Surplus Retained</span>
-                <span className="font-semibold text-[#A8E6CE] tabular-nums">{formatINR(surplus)}</span>
-              </div>
-              <div className="h-3 w-full rounded-full bg-[#0B1C19] overflow-hidden">
-                <div className="h-full bg-[#A8E6CE] rounded-full transition-all" style={{ width: `${surplusPct}%` }} />
-              </div>
+            <div className="flex items-center gap-1 rounded-lg bg-[var(--fs-surface-2)] p-1 border border-[var(--fs-border)]">
+              {(['7d', '30d', '3m', '6m', '1y'] as const).map(tf => (
+                <button
+                  key={tf}
+                  type="button"
+                  onClick={() => setTimeframe(tf)}
+                  className={`px-2 py-1 rounded text-[11px] font-mono-num font-semibold transition-colors ${
+                    timeframe === tf
+                      ? 'bg-[var(--fs-brand)] text-white dark:text-[#0A1815]'
+                      : 'text-[var(--fs-text-body)] hover:text-[var(--fs-text)]'
+                  }`}
+                >
+                  {tf}
+                </button>
+              ))}
             </div>
           </div>
 
-          <div className="p-4 rounded-xl bg-[#0B1C19] border border-[#28443C] flex items-center justify-between text-xs">
-            <span className="text-[#A7C1B8]">Remaining Allocated Budget:</span>
-            <span className="font-bold text-[#F5F7F5] tabular-nums">
+          {chartSeries.length > 0 ? (
+            <CashFlowTrendChart series={chartSeries} />
+          ) : (
+            <EmptyStateCard
+              variant="transactions"
+              title="No cash-flow timeline yet"
+              description="Add transactions or import a bank statement to visualize monthly income, expenses, and retained surplus."
+              actionLabel={t.importStatement}
+              onAction={() => onNavigate('/app/budgeting/import')}
+            />
+          )}
+
+          <div className="p-3.5 rounded-xl bg-[var(--fs-surface-2)] border border-[var(--fs-border)] flex items-center justify-between text-xs">
+            <span className="text-[var(--fs-text-body)]">Remaining Allocated Budget</span>
+            <span className="font-mono-num font-bold text-[var(--fs-text)]">
               {formatINR(m.remainingBudget)} of {formatINR(m.allocatedBudget)}
             </span>
           </div>
         </div>
 
-        {/* Spending Breakdown */}
-        <div className="lg:col-span-5 rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-[#F5F7F5]">Where Your Money Goes</h2>
-            <span className="text-xs text-[#718D83]">Total: {formatINR(spending?.totalSpent || 0)}</span>
-          </div>
-
-          <div className="space-y-3 pt-2">
-            {!spending || spending.categories.length === 0 ? (
-              <div className="p-6 rounded-xl bg-[#0B1C19] border border-[#28443C] text-center text-xs text-[#718D83]">
-                No expense categories recorded yet. Add a transaction or import a bank statement to view your category breakdown.
+        {/* 4. Coming Up Commitments */}
+        <div className="lg:col-span-5 fs-card p-6 space-y-4 flex flex-col justify-between">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-[var(--fs-accent)]" />
+                <h2 className="font-display text-base font-bold text-[var(--fs-text)]">{t.comingUp}</h2>
               </div>
+              <button
+                type="button"
+                onClick={() => onNavigate('/app/money-calendar')}
+                className="text-xs font-semibold text-[var(--fs-accent)] hover:underline"
+              >
+                Money Calendar →
+              </button>
+            </div>
+
+            {upcomingCommitments.length === 0 ? (
+              <EmptyStateCard
+                variant="recurring"
+                title="No upcoming bills logged"
+                description="Add EMIs, rent, credit card due dates, or salary dates to unlock 30/90-day Cash-Flow Radar alerts."
+                actionLabel="Open Money Calendar"
+                onAction={() => onNavigate('/app/money-calendar')}
+              />
             ) : (
-              spending.categories.slice(0, 5).map(item => (
-                <div key={item.category} className="flex items-center justify-between text-xs py-1 border-b border-[#28443C]/50 last:border-0">
-                  <span className="text-[#A7C1B8]">{item.category}</span>
-                  <div className="text-right">
-                    <div className="font-semibold text-[#F5F7F5] tabular-nums">{formatINR(item.amount)}</div>
-                    <div className="text-[10px] text-[#718D83]">{item.percentage}%</div>
+              <div className="divide-y divide-[var(--fs-border)]">
+                {upcomingCommitments.map(ev => (
+                  <div key={ev.id} className="py-3 flex items-center justify-between text-xs gap-3">
+                    <div className="min-w-0">
+                      <div className="font-semibold text-[var(--fs-text)] truncate">{ev.title}</div>
+                      <div className="text-[11px] text-[var(--fs-text-muted)]">
+                        Due {ev.dueDate} · {ev.eventType.replace('_', ' ')}
+                      </div>
+                    </div>
+                    <div className={`font-mono-num font-bold shrink-0 ${
+                      ev.direction === 'INFLOW' ? 'text-[var(--fs-success)]' : 'text-[var(--fs-text)]'
+                    }`}>
+                      {ev.direction === 'INFLOW' ? '+' : '-'}{formatINR(ev.amount)}
+                    </div>
                   </div>
-                </div>
-              ))
+                ))}
+              </div>
             )}
           </div>
 
           <button
-            onClick={() => onNavigate('/app/budgeting/budgets')}
-            className="w-full text-center py-2 text-xs font-semibold text-[#A8E6CE] rounded-lg border border-[#28443C] hover:bg-[#16352E] transition-colors"
+            type="button"
+            onClick={() => onNavigate('/app/credit-cards')}
+            className="w-full py-2 text-xs font-semibold rounded-lg border border-[var(--fs-border)] text-[var(--fs-text-body)] hover:bg-[var(--fs-surface-2)] transition-colors"
           >
-            Manage Category Budgets
+            Manage Credit Cards & Recurring Bills
           </button>
         </div>
       </div>
 
-      {/* Recent Activity & AI Insights */}
+      {/* 5. Active Goals + 6. Spending Intelligence + 7. Investment Picture */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-7 rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-4">
+        {/* 5. Goals */}
+        <div className="lg:col-span-4 fs-card p-6 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-[#F5F7F5]">Recent Activity</h2>
+            <div className="flex items-center gap-2">
+              <Target className="h-4 w-4 text-[var(--fs-accent)]" />
+              <h2 className="font-display text-base font-bold text-[var(--fs-text)]">{t.progressWorthTracking}</h2>
+            </div>
             <button
-              onClick={() => onNavigate('/app/budgeting/transactions')}
-              className="text-xs font-semibold text-[#A8E6CE] hover:underline"
+              type="button"
+              onClick={() => onNavigate('/app/goals')}
+              className="text-xs font-semibold text-[var(--fs-accent)] hover:underline"
             >
-              View All ({m.transactionCount}) →
+              All Goals →
             </button>
           </div>
 
-          <div className="overflow-x-auto">
-            {(!summary?.recentTransactions || summary.recentTransactions.length === 0) ? (
-              <div className="p-8 rounded-xl bg-[#0B1C19] border border-[#28443C] text-center space-y-3">
-                <p className="text-xs text-[#718D83]">No transactions recorded yet under your account.</p>
-                <div className="flex items-center justify-center gap-2">
-                  <button
-                    onClick={() => onNavigate('/app/budgeting/transactions')}
-                    className="rounded-lg bg-[#A8E6CE] px-3 py-1.5 text-xs font-bold text-[#0B1C19]"
-                  >
-                    Add Transaction
-                  </button>
-                  <button
-                    onClick={() => onNavigate('/app/budgeting/import')}
-                    className="rounded-lg border border-[#28443C] px-3 py-1.5 text-xs text-[#A8E6CE]"
-                  >
-                    Import Statement
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-[#28443C] text-[#718D83]">
-                    <th className="pb-2 font-medium">Description</th>
-                    <th className="pb-2 font-medium">Category</th>
-                    <th className="pb-2 font-medium">Date</th>
-                    <th className="pb-2 font-medium text-right">Amount</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#28443C]/40">
-                  {summary.recentTransactions.map(tx => (
-                    <tr key={tx.id} className="hover:bg-[#16352E]/30 transition-colors">
-                      <td className="py-2.5 font-medium text-[#F5F7F5]">
-                        <div className="truncate max-w-[180px]">{tx.description}</div>
-                        <div className="text-[10px] text-[#718D83]">{tx.account}</div>
-                      </td>
-                      <td className="py-2.5 text-[#A7C1B8]">{tx.category}</td>
-                      <td className="py-2.5 text-[#718D83] whitespace-nowrap">{tx.transactionDate}</td>
-                      <td className={`py-2.5 text-right font-semibold tabular-nums whitespace-nowrap ${
-                        tx.type === 'INCOME' ? 'text-[#55C99A]' : 'text-[#F5F7F5]'
-                      }`}>
-                        {tx.type === 'INCOME' ? '+' : '-'}{formatINR(tx.amount)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
+          {activeGoalsList.length === 0 ? (
+            <EmptyStateCard
+              variant="goals"
+              title="Set your first savings milestone"
+              description="Track Emergency Fund, Home Down Payment, Education, or Travel with clear monthly required targets."
+              actionLabel={t.addGoal}
+              onAction={() => onNavigate('/app/goals')}
+            />
+          ) : (
+            <div className="space-y-3.5">
+              {activeGoalsList.map(g => {
+                const pct = g.targetAmount > 0 ? Math.min(100, Math.round((g.currentAmount / g.targetAmount) * 100)) : 0;
+                return (
+                  <div key={g.id} className="p-3.5 rounded-xl bg-[var(--fs-surface-2)] border border-[var(--fs-border)] space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-[var(--fs-text)] truncate">{g.title}</span>
+                      <span className="font-mono-num font-bold text-[var(--fs-accent)]">{pct}%</span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-[var(--fs-bg)] overflow-hidden">
+                      <div className="h-full rounded-full bg-[var(--fs-accent)]" style={{ width: `${pct}%` }} />
+                    </div>
+                    <div className="flex justify-between text-[11px] text-[var(--fs-text-muted)] font-mono-num">
+                      <span>{formatINR(g.currentAmount)}</span>
+                      <span>Target {formatINR(g.targetAmount)}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        {/* Insights Card */}
-        <div className="lg:col-span-5 rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-4">
+        {/* 6. Spending Intelligence */}
+        <div className="lg:col-span-4 fs-card p-6 space-y-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-[#A8E6CE]" />
-              <h2 className="text-base font-bold text-[#F5F7F5]">Insights for You</h2>
-            </div>
-            <span className="text-[11px] text-[#A8E6CE] font-mono">Gemini 4 Hydrogen</span>
+            <h2 className="font-display text-base font-bold text-[var(--fs-text)]">{t.whereYourMoneyGoes}</h2>
+            <span className="font-mono-num text-xs text-[var(--fs-text-muted)]">{formatINR(spending?.totalSpent || 0)}</span>
           </div>
 
-          <div className="space-y-3">
+          {!spending || spending.categories.length === 0 ? (
+            <EmptyStateCard
+              variant="budgets"
+              title="No expense categories yet"
+              description="Categorized expenses appear here automatically once you add or import UPI & card transactions."
+              actionLabel="Manage Budgets"
+              onAction={() => onNavigate('/app/budgeting/budgets')}
+            />
+          ) : (
+            <div className="space-y-3">
+              {spending.categories.slice(0, 5).map(item => (
+                <div key={item.category} className="space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-[var(--fs-text-body)] truncate">{item.category}</span>
+                    <span className="font-mono-num font-semibold text-[var(--fs-text)]">
+                      {formatINR(item.amount)} ({item.percentage}%)
+                    </span>
+                  </div>
+                  <div className="h-1.5 w-full rounded-full bg-[var(--fs-surface-2)] overflow-hidden">
+                    <div className="h-full rounded-full bg-[var(--fs-brand)]" style={{ width: `${Math.min(100, item.percentage)}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={() => onNavigate('/app/budgeting/budgets')}
+            className="w-full py-2 text-xs font-semibold rounded-lg border border-[var(--fs-border)] text-[var(--fs-text-body)] hover:bg-[var(--fs-surface-2)] transition-colors"
+          >
+            Manage Category Budgets
+          </button>
+        </div>
+
+        {/* 7. Investment Picture */}
+        <div className="lg:col-span-4 fs-card p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-display text-base font-bold text-[var(--fs-text)]">{t.investmentPicture}</h2>
+            <button
+              type="button"
+              onClick={() => onNavigate('/app/investments')}
+              className="text-xs font-semibold text-[var(--fs-accent)] hover:underline"
+            >
+              Portfolio →
+            </button>
+          </div>
+
+          {m.portfolioValue <= 0 && (!risk || risk.classBreakdown.length === 0) ? (
+            <EmptyStateCard
+              variant="portfolio"
+              title="No holdings added yet"
+              description="Log Indian equity, ETF, mutual fund, or FD holdings to inspect concentration & drawdown exposure."
+              actionLabel="Add Holdings"
+              onAction={() => onNavigate('/app/investments')}
+            />
+          ) : (
+            <div className="space-y-3">
+              <div className="p-3.5 rounded-xl bg-[var(--fs-surface-2)] border border-[var(--fs-border)] flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] text-[var(--fs-text-muted)]">Portfolio Value</div>
+                  <div className="font-mono-num text-xl font-bold text-[var(--fs-text)]">{formatINR(m.portfolioValue)}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[11px] text-[var(--fs-text-muted)]">Unrealized P&L</div>
+                  <div className={`font-mono-num text-xs font-bold ${m.unrealizedGain >= 0 ? 'text-[var(--fs-success)]' : 'text-[var(--fs-danger)]'}`}>
+                    {m.unrealizedGain >= 0 ? '+' : ''}{formatINR(m.unrealizedGain)}
+                  </div>
+                </div>
+              </div>
+
+              {risk && (
+                <div className="grid grid-cols-2 gap-2.5 text-xs">
+                  <div className="p-3 rounded-xl border border-[var(--fs-border)]">
+                    <div className="text-[10px] text-[var(--fs-text-muted)]">Top Holding Share</div>
+                    <div className="font-mono-num font-bold text-[var(--fs-text)] mt-0.5">{risk.topHoldingConcentrationPct}%</div>
+                  </div>
+                  <div className="p-3 rounded-xl border border-[var(--fs-border)]">
+                    <div className="text-[10px] text-[var(--fs-text-muted)]">Est. Annual Volatility</div>
+                    <div className="font-mono-num font-bold text-[var(--fs-text)] mt-0.5">{risk.estimatedAnnualVolatilityPct}%</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 8. AI Monthly Money Review + 9. Financial Data Quality & Quick Actions */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="lg:col-span-7 fs-card p-6 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-[var(--fs-accent)]" />
+              <h2 className="font-display text-base font-bold text-[var(--fs-text)]">{t.monthlyReview}</h2>
+            </div>
+            <span className="text-[11px] font-mono-num text-[var(--fs-text-muted)]">Gemini 4 Hydrogen</span>
+          </div>
+
+          <div className="space-y-2.5">
             {insights.map(item => (
-              <div key={item.id} className="p-3.5 rounded-xl bg-[#0B1C19] border border-[#28443C] space-y-1.5">
-                <div className="text-xs font-semibold text-[#F5F7F5]">{item.title}</div>
-                <p className="text-[11px] text-[#A7C1B8] leading-relaxed">{item.body}</p>
+              <div key={item.id} className="p-3.5 rounded-xl bg-[var(--fs-surface-2)] border border-[var(--fs-border)] space-y-1">
+                <div className="text-xs font-semibold text-[var(--fs-text)]">{item.title}</div>
+                <p className="text-xs text-[var(--fs-text-body)] leading-relaxed">{item.body}</p>
               </div>
             ))}
 
-            {aiInsight && (
-              <div className="p-3.5 rounded-xl bg-[#16352E]/60 border border-[#A8E6CE]/40 space-y-1.5">
-                <div className="text-xs font-bold text-[#A8E6CE]">Live Gemini Financial Brief</div>
-                <div className="text-[11px] text-[#F5F7F5] whitespace-pre-wrap leading-relaxed">{aiInsight}</div>
+            {monthlyReview && !reviewDismissed && (
+              <div className="p-4 rounded-xl border border-[var(--fs-accent)]/40 bg-[var(--fs-surface-2)] space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-[var(--fs-brand)]">
+                    {reviewCompleted ? 'Review Marked Completed' : 'Live Monthly Money Review'}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setReviewCompleted(true)}
+                      className="text-[11px] font-semibold text-[var(--fs-success)] hover:underline inline-flex items-center gap-1"
+                    >
+                      <CheckCircle2 className="h-3 w-3" />
+                      <span>Complete</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setReviewDismissed(true)}
+                      className="text-[11px] text-[var(--fs-text-muted)] hover:underline"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+                <div className="text-xs text-[var(--fs-text)] whitespace-pre-wrap leading-relaxed">{monthlyReview}</div>
               </div>
             )}
 
             {aiError && (
-              <div className="p-3 rounded-xl bg-[#EB7676]/10 border border-[#EB7676]/40 text-[11px] text-[#EB7676] flex items-start gap-2">
+              <div className="p-3 rounded-xl bg-[var(--fs-danger)]/10 border border-[var(--fs-danger)]/40 text-xs text-[var(--fs-danger)] flex items-start gap-2">
                 <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                 <span>{aiError}</span>
               </div>
             )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
-              onClick={handleRequestAiInsight}
+              type="button"
+              onClick={handleGenerateMonthlyReview}
               disabled={aiLoading}
-              className="py-2.5 px-3 text-xs font-semibold text-[#A8E6CE] bg-[#16352E] border border-[#28443C] hover:border-[#72C8B0] rounded-xl transition-colors flex items-center justify-center gap-1.5 disabled:opacity-60"
+              className="fs-btn-primary px-4 py-2 text-xs font-semibold inline-flex items-center gap-1.5 disabled:opacity-60"
             >
               {aiLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-              <span>{aiLoading ? 'Generating...' : 'Generate AI Brief'}</span>
+              <span>{aiLoading ? 'Generating Monthly Review...' : 'Generate Monthly Money Review'}</span>
             </button>
             <button
+              type="button"
               onClick={onOpenAI}
-              className="py-2.5 px-3 text-xs font-bold text-[#0B1C19] bg-[#A8E6CE] hover:bg-[#72C8B0] rounded-xl transition-colors shadow-md flex items-center justify-center gap-1.5"
+              className="px-4 py-2 text-xs font-semibold rounded-lg border border-[var(--fs-border)] text-[var(--fs-text)] hover:bg-[var(--fs-surface-2)]"
             >
-              <Sparkles className="h-3.5 w-3.5" />
-              <span>Ask FinSight AI</span>
+              {t.askFinSightAI}
             </button>
+          </div>
+        </div>
+
+        {/* 9. Financial Data Quality & Quick Actions */}
+        <div className="lg:col-span-5 fs-card p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-display text-base font-bold text-[var(--fs-text)]">{t.financialDataQuality}</h2>
+            {(m.needsReviewCount ?? 0) > 0 && (
+              <button
+                type="button"
+                onClick={() => onNavigate('/app/budgeting/import')}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--fs-warning)] hover:underline"
+              >
+                <Inbox className="h-3.5 w-3.5" />
+                <span>{m.needsReviewCount} to review</span>
+              </button>
+            )}
+          </div>
+
+          {health?.missingDataNotes && health.missingDataNotes.length > 0 ? (
+            <ul className="space-y-1.5 text-xs text-[var(--fs-text-body)]">
+              {health.missingDataNotes.slice(0, 3).map((note, idx) => (
+                <li key={idx} className="p-2.5 rounded-lg bg-[var(--fs-surface-2)] border border-[var(--fs-border)]">
+                  {note}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-[var(--fs-success)]">All core personal finance signals are connected.</p>
+          )}
+
+          <div className="pt-2 border-t border-[var(--fs-border)] space-y-2">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--fs-text-muted)]">
+              {t.quickActions}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { label: 'Money Inbox', path: '/app/budgeting/import' },
+                { label: 'Cash-Flow Radar', path: '/app/money-calendar' },
+                { label: 'Tax Regime Check', path: '/app/tax/compare' },
+                { label: 'Analyze Scam SMS', path: '/app/fraud/analyze' },
+                { label: 'Business Receivables', path: '/app/business/receivables' },
+                { label: 'Download Health PDF', path: '/app/financial-health' },
+              ].map(qa => (
+                <button
+                  key={qa.path}
+                  type="button"
+                  onClick={() => onNavigate(qa.path)}
+                  className="p-2.5 rounded-lg border border-[var(--fs-border)] bg-[var(--fs-bg)] hover:bg-[var(--fs-surface-2)] text-xs font-medium text-[var(--fs-text)] text-left transition-colors"
+                >
+                  {qa.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-4">
-        <h3 className="text-sm font-bold text-[#F5F7F5] uppercase tracking-wider">Quick Actions</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          <button
-            onClick={() => onNavigate('/app/budgeting/import')}
-            className="p-3 rounded-xl border border-[#28443C] bg-[#0B1C19] hover:bg-[#16352E] hover:border-[#A8E6CE] text-xs font-medium text-[#A7C1B8] hover:text-[#F5F7F5] text-left transition-colors"
-          >
-            Import Transactions
-          </button>
-          <button
-            onClick={() => onNavigate('/app/markets/paper-trading')}
-            className="p-3 rounded-xl border border-[#28443C] bg-[#0B1C19] hover:bg-[#16352E] hover:border-[#A8E6CE] text-xs font-medium text-[#A7C1B8] hover:text-[#F5F7F5] text-left transition-colors"
-          >
-            Paper Trading
-          </button>
-          <button
-            onClick={() => onNavigate('/app/tax/compare')}
-            className="p-3 rounded-xl border border-[#28443C] bg-[#0B1C19] hover:bg-[#16352E] hover:border-[#A8E6CE] text-xs font-medium text-[#A7C1B8] hover:text-[#F5F7F5] text-left transition-colors"
-          >
-            Tax Regime Check
-          </button>
-          <button
-            onClick={() => onNavigate('/app/fraud/analyze')}
-            className="p-3 rounded-xl border border-[#28443C] bg-[#0B1C19] hover:bg-[#16352E] hover:border-[#A8E6CE] text-xs font-medium text-[#A7C1B8] hover:text-[#F5F7F5] text-left transition-colors"
-          >
-            Analyze Suspicious SMS
-          </button>
-          <button
-            onClick={() => onNavigate('/app/business/invoices/new')}
-            className="p-3 rounded-xl border border-[#28443C] bg-[#0B1C19] hover:bg-[#16352E] hover:border-[#A8E6CE] text-xs font-medium text-[#A7C1B8] hover:text-[#F5F7F5] text-left transition-colors"
-          >
-            Create GST Invoice
-          </button>
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-[#28443C] bg-[#16352E]/30 p-4 text-xs text-[#718D83] flex items-center gap-3">
-        <ShieldCheck className="h-5 w-5 text-[#A8E6CE] shrink-0" />
+      <div className="rounded-xl border border-[var(--fs-border)] bg-[var(--fs-surface-2)]/60 p-4 text-xs text-[var(--fs-text-body)] flex items-center gap-3">
+        <ShieldCheck className="h-5 w-5 text-[var(--fs-accent)] shrink-0" />
         <p>
-          FinSight provides educational information and analytical tools. It does not execute financial transactions or replace qualified financial advice.
+          FinSight calculates balances deterministically from your recorded accounts and uses AI strictly for explanation. It never executes live bank payments or market orders.
         </p>
       </div>
     </div>

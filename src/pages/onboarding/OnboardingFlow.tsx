@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { ShieldCheck, ArrowRight, Check, Sparkles } from 'lucide-react';
+import { ArrowRight, Check, Sparkles } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiFetch } from '../../utils/api';
+import { FinSightLogo } from '../../components/brand/FinSightArtwork';
 
 interface OnboardingFlowProps {
   onNavigate: (path: string) => void;
@@ -13,7 +14,6 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onNavigate }) =>
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Form states
   const [fullName, setFullName] = useState(user?.fullName || '');
   const [country] = useState('India');
   const [currency, setCurrency] = useState('INR');
@@ -77,153 +77,106 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onNavigate }) =>
   };
 
   return (
-    <div className="min-h-screen bg-[#0B1C19] text-[#F5F7F5] flex flex-col items-center justify-center p-6 py-12">
-      <div className="w-full max-w-2xl rounded-2xl border border-[#28443C] bg-[#102722] p-8 shadow-2xl space-y-8">
-        {/* Progress indicator */}
-        <div className="flex items-center justify-between border-b border-[#28443C] pb-4">
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-[#16352E] border border-[#28443C] flex items-center justify-center text-[#A8E6CE]">
-              <ShieldCheck className="h-4 w-4" />
-            </div>
-            <span className="text-sm font-bold text-[#F5F7F5]">FinSight Onboarding</span>
-          </div>
-          <div className="text-xs text-[#718D83]">
+    <div className="min-h-screen bg-[var(--fs-bg)] text-[var(--fs-text)] flex flex-col items-center justify-center p-6 py-12 transition-colors">
+      <div className="w-full max-w-2xl fs-card p-8 shadow-xl space-y-8">
+        <div className="flex items-center justify-between border-b border-[var(--fs-border)] pb-4">
+          <FinSightLogo size="sm" />
+          <div className="text-xs font-mono text-[var(--fs-text-muted)]">
             Step {step} of 6
           </div>
         </div>
 
-        {/* Step 1: Welcome */}
         {step === 1 && (
           <div className="space-y-6 text-center py-6">
-            <div className="h-16 w-16 mx-auto rounded-2xl bg-[#16352E] border border-[#28443C] flex items-center justify-center text-[#A8E6CE]">
-              <Sparkles className="h-8 w-8" />
+            <div className="h-14 w-14 mx-auto rounded-2xl bg-[var(--fs-surface-secondary)] border border-[var(--fs-border)] flex items-center justify-center text-[var(--fs-accent)]">
+              <Sparkles className="h-7 w-7" />
             </div>
             <div className="space-y-2">
-              <h1 className="text-3xl font-extrabold text-[#F5F7F5]">Welcome to your financial workspace.</h1>
-              <p className="text-sm text-[#A7C1B8] max-w-md mx-auto">
-                Let's personalize FinSight around the way you manage money in India.
+              <h1 className="text-3xl font-extrabold text-[var(--fs-text)]">Welcome to your financial workspace.</h1>
+              <p className="text-sm text-[var(--fs-text-body)] max-w-md mx-auto">
+                Let&apos;s personalize FinSight around the way you manage money in India.
               </p>
             </div>
-            <button
-              onClick={() => setStep(2)}
-              className="inline-flex items-center gap-2 rounded-xl bg-[#A8E6CE] px-8 py-3.5 text-xs font-bold text-[#0B1C19] hover:bg-[#72C8B0] transition-colors"
-            >
+            <button onClick={() => setStep(2)} className="fs-btn-primary inline-flex items-center gap-2 px-7 py-3 text-xs">
               Get Started <ArrowRight className="h-4 w-4" />
             </button>
           </div>
         )}
 
-        {/* Step 2: Personal Details */}
         {step === 2 && (
           <div className="space-y-6">
             <div>
-              <h2 className="text-2xl font-bold text-[#F5F7F5]">Tell us a little about yourself.</h2>
-              <p className="text-xs text-[#A7C1B8]">These settings configure default Indian tax rules and currency formatting.</p>
+              <h2 className="text-2xl font-bold text-[var(--fs-text)]">Tell us a little about yourself.</h2>
+              <p className="text-xs text-[var(--fs-text-body)]">These settings configure default Indian tax rules and currency formatting.</p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Full Name</label>
-                <input
-                  type="text"
-                  value={fullName}
-                  onChange={e => setFullName(e.target.value)}
-                  className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3.5 py-2.5 text-xs text-[#F5F7F5]"
-                />
+                <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Full Name</label>
+                <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} className="fs-input" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Country</label>
-                <input
-                  type="text"
-                  value={country}
-                  disabled
-                  className="w-full rounded-xl bg-[#0B1C19]/50 border border-[#28443C] px-3.5 py-2.5 text-xs text-[#718D83]"
-                />
+                <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Country</label>
+                <input type="text" value={country} disabled className="fs-input opacity-70" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Preferred Currency</label>
-                <select
-                  value={currency}
-                  onChange={e => setCurrency(e.target.value)}
-                  className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3.5 py-2.5 text-xs text-[#F5F7F5]"
-                >
+                <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Preferred Currency</label>
+                <select value={currency} onChange={e => setCurrency(e.target.value)} className="fs-input">
                   <option value="INR">INR (₹) - Indian Rupee</option>
                   <option value="USD">USD ($) - US Dollar</option>
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Financial Year</label>
-                <select
-                  value={financialYear}
-                  onChange={e => setFinancialYear(e.target.value)}
-                  className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3.5 py-2.5 text-xs text-[#F5F7F5]"
-                >
+                <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Financial Year</label>
+                <select value={financialYear} onChange={e => setFinancialYear(e.target.value)} className="fs-input">
                   <option value="2025-26">FY 2025-26 (AY 2026-27)</option>
                   <option value="2024-25">FY 2024-25 (AY 2025-26)</option>
                 </select>
               </div>
               <div className="sm:col-span-2">
-                <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Occupation / Profile</label>
+                <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Occupation / Profile</label>
                 <input
                   type="text"
                   value={occupation}
                   onChange={e => setOccupation(e.target.value)}
-                  className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3.5 py-2.5 text-xs text-[#F5F7F5]"
+                  className="fs-input"
                   placeholder="e.g. Salaried Employee, Freelancer, Small Business Owner"
                 />
               </div>
             </div>
             <div className="flex justify-between pt-4">
-              <button onClick={() => setStep(1)} className="text-xs text-[#718D83] hover:text-[#A7C1B8]">Back</button>
-              <button
-                onClick={() => setStep(3)}
-                className="rounded-xl bg-[#A8E6CE] px-6 py-2.5 text-xs font-bold text-[#0B1C19] hover:bg-[#72C8B0]"
-              >
-                Continue
-              </button>
+              <button onClick={() => setStep(1)} className="text-xs text-[var(--fs-text-muted)] hover:text-[var(--fs-text)]">Back</button>
+              <button onClick={() => setStep(3)} className="fs-btn-primary px-6 py-2.5 text-xs">Continue</button>
             </div>
           </div>
         )}
 
-        {/* Step 3: Financial Profile */}
         {step === 3 && (
           <div className="space-y-6">
             <div>
-              <h2 className="text-2xl font-bold text-[#F5F7F5]">Understand your financial starting point.</h2>
-              <p className="text-xs text-[#A7C1B8]">Sensitive financial figures are optional and stored strictly under your private account.</p>
+              <h2 className="text-2xl font-bold text-[var(--fs-text)]">Understand your starting point.</h2>
+              <p className="text-xs text-[var(--fs-text-body)]">Optional baselines stored strictly under your private account.</p>
             </div>
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Estimated Monthly Income (₹)</label>
-                <input
-                  type="number"
-                  value={monthlyIncome}
-                  onChange={e => setMonthlyIncome(e.target.value)}
-                  className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3.5 py-2.5 text-xs text-[#F5F7F5]"
-                  placeholder="e.g. 145000"
-                />
+                <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Estimated Monthly Income (₹)</label>
+                <input type="number" value={monthlyIncome} onChange={e => setMonthlyIncome(e.target.value)} className="fs-input" placeholder="e.g. 145000" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Estimated Monthly Expenses (₹)</label>
-                <input
-                  type="number"
-                  value={monthlyExpenses}
-                  onChange={e => setMonthlyExpenses(e.target.value)}
-                  className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3.5 py-2.5 text-xs text-[#F5F7F5]"
-                  placeholder="e.g. 65000"
-                />
+                <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Estimated Monthly Expenses (₹)</label>
+                <input type="number" value={monthlyExpenses} onChange={e => setMonthlyExpenses(e.target.value)} className="fs-input" placeholder="e.g. 65000" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#A7C1B8] mb-2">Financial Experience</label>
+                <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-2">Financial Experience</label>
                 <div className="grid grid-cols-3 gap-3">
                   {(['Beginner', 'Intermediate', 'Advanced'] as const).map(lvl => (
                     <button
                       key={lvl}
                       type="button"
                       onClick={() => setExperienceLevel(lvl)}
-                      className={`p-3 rounded-xl border text-xs font-semibold text-center transition-colors ${
+                      className={`p-3 rounded-lg border text-xs font-semibold text-center transition-colors ${
                         experienceLevel === lvl
-                          ? 'bg-[#16352E] border-[#A8E6CE] text-[#A8E6CE]'
-                          : 'bg-[#0B1C19] border-[#28443C] text-[#A7C1B8]'
+                          ? 'bg-[var(--fs-brand)] text-white border-[var(--fs-brand)]'
+                          : 'bg-[var(--fs-bg)] border-[var(--fs-border)] text-[var(--fs-text-body)]'
                       }`}
                     >
                       {lvl}
@@ -233,48 +186,38 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onNavigate }) =>
               </div>
             </div>
             <div className="flex justify-between pt-4">
-              <button onClick={() => setStep(2)} className="text-xs text-[#718D83] hover:text-[#A7C1B8]">Back</button>
-              <button
-                onClick={() => setStep(4)}
-                className="rounded-xl bg-[#A8E6CE] px-6 py-2.5 text-xs font-bold text-[#0B1C19] hover:bg-[#72C8B0]"
-              >
-                Continue
-              </button>
+              <button onClick={() => setStep(2)} className="text-xs text-[var(--fs-text-muted)] hover:text-[var(--fs-text)]">Back</button>
+              <button onClick={() => setStep(4)} className="fs-btn-primary px-6 py-2.5 text-xs">Continue</button>
             </div>
           </div>
         )}
 
-        {/* Step 4: Preferences */}
         {step === 4 && (
           <div className="space-y-6">
             <div>
-              <h2 className="text-2xl font-bold text-[#F5F7F5]">Choose how you want to use FinSight.</h2>
-              <p className="text-xs text-[#A7C1B8]">Configure how detailed AI explanations should be across tax, investing, and fraud checks.</p>
+              <h2 className="text-2xl font-bold text-[var(--fs-text)]">Choose how FinSight speaks to you.</h2>
+              <p className="text-xs text-[var(--fs-text-body)]">Configure bilingual language and AI explanation depth.</p>
             </div>
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Preferred Language</label>
-                <select
-                  value={language}
-                  onChange={e => setLanguage(e.target.value)}
-                  className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3.5 py-2.5 text-xs text-[#F5F7F5]"
-                >
+                <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Preferred Language</label>
+                <select value={language} onChange={e => setLanguage(e.target.value)} className="fs-input">
                   <option value="English">English</option>
-                  <option value="Hindi">Hindi (हिंदी)</option>
+                  <option value="Hindi">Hindi (हिन्दी)</option>
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#A7C1B8] mb-2">AI Explanation Level</label>
+                <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-2">AI Explanation Level</label>
                 <div className="grid grid-cols-3 gap-3">
                   {(['Simple', 'Balanced', 'Detailed'] as const).map(lvl => (
                     <button
                       key={lvl}
                       type="button"
                       onClick={() => setExplanationLevel(lvl)}
-                      className={`p-3 rounded-xl border text-xs font-semibold text-center transition-colors ${
+                      className={`p-3 rounded-lg border text-xs font-semibold text-center transition-colors ${
                         explanationLevel === lvl
-                          ? 'bg-[#16352E] border-[#A8E6CE] text-[#A8E6CE]'
-                          : 'bg-[#0B1C19] border-[#28443C] text-[#A7C1B8]'
+                          ? 'bg-[var(--fs-brand)] text-white border-[var(--fs-brand)]'
+                          : 'bg-[var(--fs-bg)] border-[var(--fs-border)] text-[var(--fs-text-body)]'
                       }`}
                     >
                       {lvl}
@@ -284,32 +227,26 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onNavigate }) =>
               </div>
             </div>
             <div className="flex justify-between pt-4">
-              <button onClick={() => setStep(3)} className="text-xs text-[#718D83] hover:text-[#A7C1B8]">Back</button>
-              <button
-                onClick={() => setStep(5)}
-                className="rounded-xl bg-[#A8E6CE] px-6 py-2.5 text-xs font-bold text-[#0B1C19] hover:bg-[#72C8B0]"
-              >
-                Continue
-              </button>
+              <button onClick={() => setStep(3)} className="text-xs text-[var(--fs-text-muted)] hover:text-[var(--fs-text)]">Back</button>
+              <button onClick={() => setStep(5)} className="fs-btn-primary px-6 py-2.5 text-xs">Continue</button>
             </div>
           </div>
         )}
 
-        {/* Step 5: Feature Selection */}
         {step === 5 && (
           <div className="space-y-6">
             <div>
-              <h2 className="text-2xl font-bold text-[#F5F7F5]">What would you like to explore?</h2>
-              <p className="text-xs text-[#A7C1B8]">Select one or more financial tools for your workspace.</p>
+              <h2 className="text-2xl font-bold text-[var(--fs-text)]">Select your primary workspace tools.</h2>
+              <p className="text-xs text-[var(--fs-text-body)]">You can enable or access all modules anytime from the sidebar.</p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {[
-                { name: 'Smart Budgeting', desc: 'UPI alerts, categorization & monthly limits' },
-                { name: 'Investing & Portfolio Guide', desc: 'Holdings, index funds & asset allocation' },
+                { name: 'Smart Budgeting', desc: 'UPI alerts, Money Inbox & monthly limits' },
+                { name: 'Investing & Portfolio Guide', desc: 'Holdings, risk drift & decision journal' },
                 { name: 'Trading & Market Insights', desc: 'NSE historical charts & paper trading' },
-                { name: 'Tax Helper', desc: 'Old vs new regime & deduction organizer' },
-                { name: 'Scam & Fraud Detector', desc: 'Phishing message & fake UPI check' },
-                { name: 'Small Business Finance', desc: 'GST invoices, cash flow & EMI calculator' },
+                { name: 'Tax Helper', desc: 'Old vs New regime & ITR readiness' },
+                { name: 'Scam & Fraud Detector', desc: 'Phishing links, QR & fake UPI checks' },
+                { name: 'Small Business Finance', desc: 'GST invoices, aging receivables & reconciliation' },
               ].map(tool => {
                 const isSelected = selectedTools.includes(tool.name);
                 return (
@@ -318,17 +255,19 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onNavigate }) =>
                     onClick={() => toggleTool(tool.name)}
                     className={`p-4 rounded-xl border cursor-pointer transition-colors flex items-start justify-between ${
                       isSelected
-                        ? 'bg-[#16352E] border-[#A8E6CE]'
-                        : 'bg-[#0B1C19] border-[#28443C] hover:border-[#718D83]'
+                        ? 'bg-[var(--fs-surface-secondary)] border-[var(--fs-accent)]'
+                        : 'bg-[var(--fs-bg)] border-[var(--fs-border)]'
                     }`}
                   >
                     <div>
-                      <h4 className="text-xs font-bold text-[#F5F7F5]">{tool.name}</h4>
-                      <p className="text-[11px] text-[#A7C1B8] mt-1">{tool.desc}</p>
+                      <h4 className="text-xs font-bold text-[var(--fs-text)]">{tool.name}</h4>
+                      <p className="text-[11px] text-[var(--fs-text-body)] mt-1">{tool.desc}</p>
                     </div>
-                    <div className={`h-5 w-5 rounded-md flex items-center justify-center shrink-0 ml-2 ${
-                      isSelected ? 'bg-[#A8E6CE] text-[#0B1C19]' : 'border border-[#28443C]'
-                    }`}>
+                    <div
+                      className={`h-5 w-5 rounded-md flex items-center justify-center shrink-0 ml-2 ${
+                        isSelected ? 'bg-[var(--fs-brand)] text-white' : 'border border-[var(--fs-border)]'
+                      }`}
+                    >
                       {isSelected && <Check className="h-3.5 w-3.5 stroke-[3]" />}
                     </div>
                   </div>
@@ -336,38 +275,32 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onNavigate }) =>
               })}
             </div>
             <div className="flex justify-between pt-4">
-              <button onClick={() => setStep(4)} className="text-xs text-[#718D83] hover:text-[#A7C1B8]">Back</button>
-              <button
-                onClick={() => setStep(6)}
-                className="rounded-xl bg-[#A8E6CE] px-6 py-2.5 text-xs font-bold text-[#0B1C19] hover:bg-[#72C8B0]"
-              >
-                Complete Setup
-              </button>
+              <button onClick={() => setStep(4)} className="text-xs text-[var(--fs-text-muted)] hover:text-[var(--fs-text)]">Back</button>
+              <button onClick={() => setStep(6)} className="fs-btn-primary px-6 py-2.5 text-xs">Complete Setup</button>
             </div>
           </div>
         )}
 
-        {/* Step 6: Onboarding Complete */}
         {step === 6 && (
           <div className="space-y-6 text-center py-6">
-            <div className="h-16 w-16 mx-auto rounded-2xl bg-[#55C99A]/20 border border-[#55C99A] flex items-center justify-center text-[#55C99A]">
-              <Check className="h-8 w-8 stroke-[3]" />
+            <div className="h-14 w-14 mx-auto rounded-2xl bg-[var(--fs-success)]/15 border border-[var(--fs-success)]/40 flex items-center justify-center text-[var(--fs-success)]">
+              <Check className="h-7 w-7 stroke-[3]" />
             </div>
             <div className="space-y-2">
-              <h1 className="text-3xl font-extrabold text-[#F5F7F5]">Your financial workspace is ready.</h1>
-              <p className="text-sm text-[#A7C1B8] max-w-md mx-auto">
-                Start exploring the tools you selected. You can import transactions or check your investment overview anytime.
+              <h1 className="text-3xl font-extrabold text-[var(--fs-text)]">Your financial workspace is ready.</h1>
+              <p className="text-sm text-[var(--fs-text-body)] max-w-md mx-auto">
+                Start exploring your Dashboard, Financial Health Index, Cash-Flow Radar, and AI assistant anytime.
               </p>
             </div>
             {saveError && (
-              <div className="p-3 rounded-xl bg-[#EB7676]/10 border border-[#EB7676]/40 text-xs text-[#EB7676]">
+              <div className="p-3 rounded-xl bg-[var(--fs-danger)]/10 border border-[var(--fs-danger)]/40 text-xs text-[var(--fs-danger)]">
                 {saveError}
               </div>
             )}
             <button
               onClick={handleComplete}
               disabled={isSaving}
-              className="inline-flex items-center gap-2 rounded-xl bg-[#A8E6CE] px-8 py-3.5 text-xs font-bold text-[#0B1C19] hover:bg-[#72C8B0] disabled:opacity-60 transition-colors shadow-lg"
+              className="fs-btn-primary inline-flex items-center gap-2 px-7 py-3 text-xs disabled:opacity-60"
             >
               {isSaving ? 'Saving Workspace...' : 'Go to Dashboard'} <ArrowRight className="h-4 w-4" />
             </button>

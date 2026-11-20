@@ -9,10 +9,18 @@ import {
   AlertCircle,
   Save,
   Loader2,
+  ClipboardCheck,
+  CalendarClock,
 } from 'lucide-react';
-import { TaxCalculationRecord, TaxDeduction, TaxDocument } from '../../types';
+import {
+  TaxCalculationRecord,
+  TaxDeduction,
+  TaxDocument,
+  TaxReadinessItem,
+} from '../../types';
 import { calculateIndianTax, formatINR } from '../../utils/financialMath';
 import { apiFetch } from '../../utils/api';
+import { EmptyStateCard } from '../../components/brand/FinSightArtwork';
 
 interface TaxModuleProps {
   subview: 'overview' | 'compare' | 'calculator' | 'deductions' | 'documents' | 'summary';
@@ -29,6 +37,7 @@ export const TaxModule: React.FC<TaxModuleProps> = ({
   const [deductions, setDeductions] = useState<TaxDeduction[]>([]);
   const [calculations, setCalculations] = useState<TaxCalculationRecord[]>([]);
   const [documents, setDocuments] = useState<TaxDocument[]>([]);
+  const [readinessItems, setReadinessItems] = useState<TaxReadinessItem[]>([]);
   const [annualSalary, setAnnualSalary] = useState('1200000');
   const [otherIncome, setOtherIncome] = useState('0');
   const [showDeductionModal, setShowDeductionModal] = useState(false);
@@ -46,22 +55,21 @@ export const TaxModule: React.FC<TaxModuleProps> = ({
 
   const loadTaxWorkspace = useCallback(async () => {
     try {
-      const [profRes, dedRes, calcRes, docRes] = await Promise.all([
+      const [profRes, dedRes, calcRes, docRes, readyRes] = await Promise.all([
         apiFetch('/api/v1/tax/profile'),
         apiFetch('/api/v1/tax/deductions'),
         apiFetch('/api/v1/tax/calculations'),
         apiFetch('/api/v1/tax/documents'),
+        apiFetch(`/api/v1/tax/readiness?fy=${financialYear}`),
       ]);
-      const [profJson, dedJson, calcJson, docJson] = await Promise.all([
+      const [profJson, dedJson, calcJson, docJson, readyJson] = await Promise.all([
         profRes.json(),
         dedRes.json(),
         calcRes.json(),
         docRes.json(),
+        readyRes.json(),
       ]);
       if (profJson.success && profJson.data) {
-        if (profJson.data.financialYear === '2024-25' || profJson.data.financialYear === '2025-26') {
-          setFinancialYear(profJson.data.financialYear);
-        }
         if (profJson.data.annualSalary > 0 || profJson.data.otherIncome > 0) {
           setAnnualSalary(String(profJson.data.annualSalary));
           setOtherIncome(String(profJson.data.otherIncome));
@@ -70,10 +78,11 @@ export const TaxModule: React.FC<TaxModuleProps> = ({
       if (dedJson.success) setDeductions(dedJson.data || []);
       if (calcJson.success) setCalculations(calcJson.data || []);
       if (docJson.success) setDocuments(docJson.data || []);
+      if (readyJson.success && Array.isArray(readyJson.data)) setReadinessItems(readyJson.data);
     } catch (err) {
       setStatusError(err instanceof Error ? err.message : 'Unable to load tax workspace.');
     }
-  }, []);
+  }, [financialYear]);
 
   useEffect(() => {
     loadTaxWorkspace();
@@ -90,6 +99,25 @@ export const TaxModule: React.FC<TaxModuleProps> = ({
   const newRegimeTax = calculateIndianTax(grossIncome, totalDeductionsClaimed, 'NEW', financialYear);
   const diff = oldRegimeTax.totalTax - newRegimeTax.totalTax;
   const isNewBetter = newRegimeTax.totalTax <= oldRegimeTax.totalTax;
+
+  const verifiedReadinessCount = readinessItems.filter(
+    i => i.status === 'VERIFIED_BY_USER' || i.status === 'UPLOADED'
+  ).length;
+
+  const handleUpdateReadinessStatus = async (
+    id: string,
+    status: TaxReadinessItem['status']
+  ) => {
+    const res = await apiFetch(`/api/v1/tax/readiness/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    const json = await res.json();
+    if (res.ok && json.success && json.data) {
+      setReadinessItems(prev => prev.map(item => (item.id === id ? json.data : item)));
+    }
+  };
 
   const handleSaveProfileAndCalc = async () => {
     setStatusError(null);
@@ -194,7 +222,9 @@ export const TaxModule: React.FC<TaxModuleProps> = ({
         throw new Error(json?.error?.message || 'Document upload failed.');
       }
       setDocuments(prev => [json.data, ...prev]);
-      setDocUploadStatus(`Document "${json.data.name}" (${json.data.fileSize}) stored securely in your private tax vault.`);
+      setDocUploadStatus(
+        `Document "${json.data.name}" (${json.data.fileSize}) stored securely in your private tax vault.`
+      );
     } catch (err) {
       setStatusError(err instanceof Error ? err.message : 'Unable to upload document.');
     } finally {
@@ -227,29 +257,46 @@ export const TaxModule: React.FC<TaxModuleProps> = ({
     }
   };
 
+  const cbdtDeadlines =
+    financialYear === '2025-26'
+      ? [
+          { date: '15 Jun / 15 Sep / 15 Dec 2025', title: 'Advance Tax Instalments (15% / 45% / 75%)' },
+          { date: '15 Mar 2026', title: '100% Advance Tax & Final 80C / 80D Window' },
+          { date: '31 Jul 2026', title: 'ITR Filing Due Date (Non-Audit Individuals, AY 2026-27)' },
+        ]
+      : [
+          { date: '15 Mar 2025', title: '100% Advance Tax Instalment (FY 2024-25)' },
+          { date: '31 Jul 2025', title: 'ITR Filing Due Date (AY 2025-26)' },
+          { date: '31 Dec 2025', title: 'Belated / Revised Return Deadline (AY 2025-26)' },
+        ];
+
   return (
-    <div className="p-6 md:p-8 space-y-6 max-w-7xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#28443C] pb-6">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--fs-border)] pb-5">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#F5F7F5] tracking-tight">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--fs-accent)]">
+            Section 115BAC · Chapter VI-A · Filing Readiness
+          </p>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-[var(--fs-text)] tracking-tight mt-1">
             Tax Helper (India FY {financialYear})
           </h1>
-          <p className="text-xs text-[#A7C1B8] mt-1">
-            Compare Old vs New Tax Regimes ({newRegimeTax.rulesetVersion}), organize Chapter VI-A deductions, and store Form 16 proofs.
+          <p className="text-xs text-[var(--fs-text-body)] mt-1">
+            Compare Old vs New Tax Regimes ({newRegimeTax.rulesetVersion}), track CBDT filing readiness, and store Form 16 proofs.
           </p>
         </div>
         <div className="flex items-center gap-2">
           <select
+            aria-label="Select Financial Year"
             value={financialYear}
             onChange={e => setFinancialYear(e.target.value as '2025-26' | '2024-25')}
-            className="rounded-lg bg-[#102722] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+            className="fs-input w-auto py-2"
           >
             <option value="2025-26">FY 2025-26 (AY 2026-27)</option>
             <option value="2024-25">FY 2024-25 (AY 2025-26)</option>
           </select>
           <button
             onClick={() => setShowDeductionModal(true)}
-            className="flex items-center gap-1.5 rounded-lg bg-[#A8E6CE] px-3.5 py-2 text-xs font-semibold text-[#0B1C19] hover:bg-[#72C8B0] transition-colors"
+            className="fs-btn-primary flex items-center gap-1.5 px-3.5 py-2 text-xs whitespace-nowrap"
           >
             <Plus className="h-3.5 w-3.5" />
             <span>Add Deduction</span>
@@ -258,36 +305,36 @@ export const TaxModule: React.FC<TaxModuleProps> = ({
       </div>
 
       {statusError && (
-        <div className="p-3.5 rounded-xl bg-[#EB7676]/10 border border-[#EB7676]/40 text-xs text-[#EB7676] flex items-center gap-2">
+        <div className="p-3.5 rounded-xl bg-[var(--fs-danger)]/10 border border-[var(--fs-danger)]/30 text-xs text-[var(--fs-danger)] flex items-center gap-2">
           <AlertCircle className="h-4 w-4 shrink-0" />
           <span>{statusError}</span>
         </div>
       )}
 
       {saveMessage && (
-        <div className="p-3.5 rounded-xl bg-[#55C99A]/10 border border-[#55C99A]/40 text-xs text-[#55C99A] flex items-center gap-2">
+        <div className="p-3.5 rounded-xl bg-[var(--fs-success)]/10 border border-[var(--fs-success)]/30 text-xs text-[var(--fs-success)] flex items-center gap-2">
           <CheckCircle className="h-4 w-4 shrink-0" />
           <span>{saveMessage}</span>
         </div>
       )}
 
       {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-[#28443C] pb-2 overflow-x-auto whitespace-nowrap">
+      <div className="flex items-center gap-2 border-b border-[var(--fs-border)] pb-2 overflow-x-auto whitespace-nowrap">
         {[
           { label: 'Overview', path: '/app/tax', key: 'overview' },
           { label: 'Old vs New Regime', path: '/app/tax/compare', key: 'compare' },
           { label: 'Tax Calculator', path: '/app/tax/calculator', key: 'calculator' },
           { label: `Deductions & Proofs (${fyDeductions.length})`, path: '/app/tax/deductions', key: 'deductions' },
           { label: `Tax Documents (${documents.length})`, path: '/app/tax/documents', key: 'documents' },
-          { label: 'Tax Summary', path: '/app/tax/summary', key: 'summary' },
+          { label: 'Tax Summary & Readiness', path: '/app/tax/summary', key: 'summary' },
         ].map(tab => (
           <button
             key={tab.key}
             onClick={() => onNavigate(tab.path)}
-            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
               subview === tab.key
-                ? 'bg-[#16352E] text-[#A8E6CE] border border-[#28443C]'
-                : 'text-[#A7C1B8] hover:text-[#F5F7F5]'
+                ? 'bg-[var(--fs-surface-secondary)] text-[var(--fs-text)] border border-[var(--fs-border)]'
+                : 'text-[var(--fs-text-body)] hover:text-[var(--fs-text)]'
             }`}
           >
             {tab.label}
@@ -298,167 +345,217 @@ export const TaxModule: React.FC<TaxModuleProps> = ({
       {/* SUBVIEW 1: OVERVIEW, COMPARE & CALCULATOR */}
       {(subview === 'overview' || subview === 'compare' || subview === 'calculator') && (
         <div className="space-y-6">
-          <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-4 max-w-4xl">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-[#F5F7F5]">Annual Income & Eligible Deductions ({financialYear})</h3>
+          <div className="fs-card p-6 space-y-4 max-w-5xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <h3 className="text-sm font-bold text-[var(--fs-text)]">
+                Annual Income &amp; Eligible Deductions ({financialYear})
+              </h3>
               <button
                 onClick={handleSaveProfileAndCalc}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-[#16352E] border border-[#28443C] px-3 py-1.5 text-xs font-semibold text-[#A8E6CE] hover:border-[#72C8B0]"
+                className="fs-btn-secondary inline-flex items-center gap-1.5 px-3 py-1.5 text-xs self-start"
               >
-                <Save className="h-3.5 w-3.5" />
+                <Save className="h-3.5 w-3.5 text-[var(--fs-accent)]" />
                 <span>Save Calculation Snapshot</span>
               </button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Gross Annual Salary (₹)</label>
+                <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">
+                  Gross Annual Salary (₹)
+                </label>
                 <input
                   type="number"
                   min="0"
                   value={annualSalary}
                   onChange={e => setAnnualSalary(e.target.value)}
-                  className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                  className="fs-input font-mono-num"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Other Income (Interest / Freelance) (₹)</label>
+                <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">
+                  Other Income (Interest / Freelance) (₹)
+                </label>
                 <input
                   type="number"
                   min="0"
                   value={otherIncome}
                   onChange={e => setOtherIncome(e.target.value)}
-                  className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                  className="fs-input font-mono-num"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Eligible Chapter VI-A Deductions (₹)</label>
+                <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">
+                  Eligible Chapter VI-A Deductions (₹)
+                </label>
                 <input
                   type="number"
                   disabled
                   value={totalDeductionsClaimed}
-                  className="w-full rounded-xl bg-[#0B1C19]/60 border border-[#28443C] px-3 py-2 text-xs text-[#718D83]"
+                  className="fs-input font-mono-num opacity-70"
                 />
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl">
             {/* New Regime Card */}
-            <div className={`rounded-2xl border p-6 space-y-4 ${
-              isNewBetter ? 'border-[#55C99A] bg-[#102722]' : 'border-[#28443C] bg-[#102722]/60'
-            }`}>
-              <div className="flex items-center justify-between">
+            <div
+              className={`fs-card p-6 space-y-4 ${
+                isNewBetter ? 'border-[var(--fs-success)] ring-1 ring-[var(--fs-success)]/30' : ''
+              }`}
+            >
+              <div className="flex items-start justify-between gap-2">
                 <div>
-                  <h4 className="text-base font-bold text-[#F5F7F5]">New Tax Regime (Section 115BAC)</h4>
-                  <span className="text-xs text-[#718D83]">Default Regime · Salaried Std Deduction ₹75,000</span>
+                  <h4 className="text-base font-bold text-[var(--fs-text)]">
+                    New Tax Regime (Section 115BAC)
+                  </h4>
+                  <span className="text-xs text-[var(--fs-text-muted)]">
+                    Default Regime · Salaried Std Deduction ₹75,000
+                  </span>
                 </div>
                 {isNewBetter && (
-                  <span className="rounded-full bg-[#55C99A]/20 border border-[#55C99A] px-2.5 py-0.5 text-[10px] font-bold text-[#55C99A]">
+                  <span className="rounded-md bg-[var(--fs-success)]/15 border border-[var(--fs-success)]/40 px-2 py-0.5 text-[10px] font-bold text-[var(--fs-success)] shrink-0">
                     Recommended Lower Tax
                   </span>
                 )}
               </div>
 
               <div className="space-y-2 text-xs pt-2">
-                <div className="flex justify-between text-[#A7C1B8]">
+                <div className="flex justify-between text-[var(--fs-text-body)]">
                   <span>Gross Total Income:</span>
-                  <span className="font-semibold text-[#F5F7F5] tabular-nums">{formatINR(grossIncome)}</span>
+                  <span className="font-semibold font-mono-num text-[var(--fs-text)] tabular-nums">
+                    {formatINR(grossIncome)}
+                  </span>
                 </div>
-                <div className="flex justify-between text-[#A7C1B8]">
+                <div className="flex justify-between text-[var(--fs-text-body)]">
                   <span>Standard Deduction:</span>
-                  <span className="font-semibold text-[#55C99A] tabular-nums">-{formatINR(newRegimeTax.standardDeduction)}</span>
+                  <span className="font-semibold font-mono-num text-[var(--fs-success)] tabular-nums">
+                    -{formatINR(newRegimeTax.standardDeduction)}
+                  </span>
                 </div>
-                <div className="flex justify-between text-[#A7C1B8]">
+                <div className="flex justify-between text-[var(--fs-text-body)]">
                   <span>Net Taxable Income:</span>
-                  <span className="font-semibold text-[#F5F7F5] tabular-nums">{formatINR(newRegimeTax.taxableIncome)}</span>
+                  <span className="font-semibold font-mono-num text-[var(--fs-text)] tabular-nums">
+                    {formatINR(newRegimeTax.taxableIncome)}
+                  </span>
                 </div>
                 {newRegimeTax.rebate87A > 0 && (
-                  <div className="flex justify-between text-[#55C99A]">
+                  <div className="flex justify-between text-[var(--fs-success)]">
                     <span>Section 87A Rebate:</span>
-                    <span className="font-semibold tabular-nums">-{formatINR(newRegimeTax.rebate87A)}</span>
+                    <span className="font-semibold font-mono-num tabular-nums">
+                      -{formatINR(newRegimeTax.rebate87A)}
+                    </span>
                   </div>
                 )}
-                <div className="flex justify-between text-[#A7C1B8] pt-2 border-t border-[#28443C]">
+                <div className="flex justify-between text-[var(--fs-text-body)] pt-2 border-t border-[var(--fs-border)]">
                   <span>Income Tax Before Cess:</span>
-                  <span className="font-semibold text-[#F5F7F5] tabular-nums">{formatINR(newRegimeTax.taxBeforeCess)}</span>
+                  <span className="font-semibold font-mono-num text-[var(--fs-text)] tabular-nums">
+                    {formatINR(newRegimeTax.taxBeforeCess)}
+                  </span>
                 </div>
                 {newRegimeTax.surcharge > 0 && (
-                  <div className="flex justify-between text-[#E5B764]">
+                  <div className="flex justify-between text-[var(--fs-warning)]">
                     <span>Income Surcharge:</span>
-                    <span className="font-semibold tabular-nums">{formatINR(newRegimeTax.surcharge)}</span>
+                    <span className="font-semibold font-mono-num tabular-nums">
+                      {formatINR(newRegimeTax.surcharge)}
+                    </span>
                   </div>
                 )}
-                <div className="flex justify-between text-[#A7C1B8]">
-                  <span>Health & Education Cess (4%):</span>
-                  <span className="font-semibold text-[#F5F7F5] tabular-nums">{formatINR(newRegimeTax.cess)}</span>
+                <div className="flex justify-between text-[var(--fs-text-body)]">
+                  <span>Health &amp; Education Cess (4%):</span>
+                  <span className="font-semibold font-mono-num text-[var(--fs-text)] tabular-nums">
+                    {formatINR(newRegimeTax.cess)}
+                  </span>
                 </div>
-                <div className="flex justify-between text-sm font-bold text-[#F5F7F5] pt-2 border-t border-[#28443C]">
+                <div className="flex justify-between text-sm font-bold text-[var(--fs-text)] pt-2 border-t border-[var(--fs-border)]">
                   <span>Total Estimated Tax:</span>
-                  <span className="text-[#A8E6CE] tabular-nums">{formatINR(newRegimeTax.totalTax)}</span>
+                  <span className="font-mono-num text-[var(--fs-accent)] tabular-nums">
+                    {formatINR(newRegimeTax.totalTax)}
+                  </span>
                 </div>
               </div>
             </div>
 
             {/* Old Regime Card */}
-            <div className={`rounded-2xl border p-6 space-y-4 ${
-              !isNewBetter ? 'border-[#55C99A] bg-[#102722]' : 'border-[#28443C] bg-[#102722]/60'
-            }`}>
-              <div className="flex items-center justify-between">
+            <div
+              className={`fs-card p-6 space-y-4 ${
+                !isNewBetter ? 'border-[var(--fs-success)] ring-1 ring-[var(--fs-success)]/30' : ''
+              }`}
+            >
+              <div className="flex items-start justify-between gap-2">
                 <div>
-                  <h4 className="text-base font-bold text-[#F5F7F5]">Old Tax Regime</h4>
-                  <span className="text-xs text-[#718D83]">Std Deduction ₹50,000 + 80C/80D Exemptions</span>
+                  <h4 className="text-base font-bold text-[var(--fs-text)]">Old Tax Regime</h4>
+                  <span className="text-xs text-[var(--fs-text-muted)]">
+                    Std Deduction ₹50,000 + 80C/80D Exemptions
+                  </span>
                 </div>
                 {!isNewBetter && (
-                  <span className="rounded-full bg-[#55C99A]/20 border border-[#55C99A] px-2.5 py-0.5 text-[10px] font-bold text-[#55C99A]">
+                  <span className="rounded-md bg-[var(--fs-success)]/15 border border-[var(--fs-success)]/40 px-2 py-0.5 text-[10px] font-bold text-[var(--fs-success)] shrink-0">
                     Recommended Lower Tax
                   </span>
                 )}
               </div>
 
               <div className="space-y-2 text-xs pt-2">
-                <div className="flex justify-between text-[#A7C1B8]">
+                <div className="flex justify-between text-[var(--fs-text-body)]">
                   <span>Gross Total Income:</span>
-                  <span className="font-semibold text-[#F5F7F5] tabular-nums">{formatINR(grossIncome)}</span>
+                  <span className="font-semibold font-mono-num text-[var(--fs-text)] tabular-nums">
+                    {formatINR(grossIncome)}
+                  </span>
                 </div>
-                <div className="flex justify-between text-[#A7C1B8]">
+                <div className="flex justify-between text-[var(--fs-text-body)]">
                   <span>Std Deduction + 80C/80D:</span>
-                  <span className="font-semibold text-[#55C99A] tabular-nums">-{formatINR(oldRegimeTax.deductions)}</span>
+                  <span className="font-semibold font-mono-num text-[var(--fs-success)] tabular-nums">
+                    -{formatINR(oldRegimeTax.deductions)}
+                  </span>
                 </div>
-                <div className="flex justify-between text-[#A7C1B8]">
+                <div className="flex justify-between text-[var(--fs-text-body)]">
                   <span>Net Taxable Income:</span>
-                  <span className="font-semibold text-[#F5F7F5] tabular-nums">{formatINR(oldRegimeTax.taxableIncome)}</span>
+                  <span className="font-semibold font-mono-num text-[var(--fs-text)] tabular-nums">
+                    {formatINR(oldRegimeTax.taxableIncome)}
+                  </span>
                 </div>
                 {oldRegimeTax.rebate87A > 0 && (
-                  <div className="flex justify-between text-[#55C99A]">
+                  <div className="flex justify-between text-[var(--fs-success)]">
                     <span>Section 87A Rebate:</span>
-                    <span className="font-semibold tabular-nums">-{formatINR(oldRegimeTax.rebate87A)}</span>
+                    <span className="font-semibold font-mono-num tabular-nums">
+                      -{formatINR(oldRegimeTax.rebate87A)}
+                    </span>
                   </div>
                 )}
-                <div className="flex justify-between text-[#A7C1B8] pt-2 border-t border-[#28443C]">
+                <div className="flex justify-between text-[var(--fs-text-body)] pt-2 border-t border-[var(--fs-border)]">
                   <span>Income Tax Before Cess:</span>
-                  <span className="font-semibold text-[#F5F7F5] tabular-nums">{formatINR(oldRegimeTax.taxBeforeCess)}</span>
+                  <span className="font-semibold font-mono-num text-[var(--fs-text)] tabular-nums">
+                    {formatINR(oldRegimeTax.taxBeforeCess)}
+                  </span>
                 </div>
                 {oldRegimeTax.surcharge > 0 && (
-                  <div className="flex justify-between text-[#E5B764]">
+                  <div className="flex justify-between text-[var(--fs-warning)]">
                     <span>Income Surcharge:</span>
-                    <span className="font-semibold tabular-nums">{formatINR(oldRegimeTax.surcharge)}</span>
+                    <span className="font-semibold font-mono-num tabular-nums">
+                      {formatINR(oldRegimeTax.surcharge)}
+                    </span>
                   </div>
                 )}
-                <div className="flex justify-between text-[#A7C1B8]">
-                  <span>Health & Education Cess (4%):</span>
-                  <span className="font-semibold text-[#F5F7F5] tabular-nums">{formatINR(oldRegimeTax.cess)}</span>
+                <div className="flex justify-between text-[var(--fs-text-body)]">
+                  <span>Health &amp; Education Cess (4%):</span>
+                  <span className="font-semibold font-mono-num text-[var(--fs-text)] tabular-nums">
+                    {formatINR(oldRegimeTax.cess)}
+                  </span>
                 </div>
-                <div className="flex justify-between text-sm font-bold text-[#F5F7F5] pt-2 border-t border-[#28443C]">
+                <div className="flex justify-between text-sm font-bold text-[var(--fs-text)] pt-2 border-t border-[var(--fs-border)]">
                   <span>Total Estimated Tax:</span>
-                  <span className="text-[#A8E6CE] tabular-nums">{formatINR(oldRegimeTax.totalTax)}</span>
+                  <span className="font-mono-num text-[var(--fs-accent)] tabular-nums">
+                    {formatINR(oldRegimeTax.totalTax)}
+                  </span>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="max-w-4xl p-4 rounded-xl border border-[#28443C] bg-[#16352E] flex items-center justify-between text-xs">
-            <div className="flex items-center gap-2.5 text-[#F5F7F5]">
-              <CheckCircle className="h-4 w-4 text-[#55C99A] shrink-0" />
+          <div className="max-w-5xl fs-card-secondary p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2.5 text-[var(--fs-text)]">
+              <CheckCircle className="h-4 w-4 text-[var(--fs-success)] shrink-0" />
               <span>
                 {isNewBetter
                   ? `New Tax Regime saves you approx ${formatINR(Math.abs(diff))} in taxes.`
@@ -467,29 +564,99 @@ export const TaxModule: React.FC<TaxModuleProps> = ({
             </div>
             <button
               onClick={onOpenAI}
-              className="font-semibold text-[#A8E6CE] hover:underline shrink-0 ml-4"
+              className="font-semibold text-[var(--fs-accent)] hover:underline shrink-0"
             >
               Ask AI to Explain Slabs →
             </button>
           </div>
 
+          {/* Tax Readiness Checklist & CBDT Deadlines */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 max-w-5xl">
+            <div className="lg:col-span-7 fs-card p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ClipboardCheck className="h-4 w-4 text-[var(--fs-accent)]" />
+                  <h3 className="text-sm font-bold text-[var(--fs-text)]">
+                    Tax Filing Readiness Checklist (FY {financialYear})
+                  </h3>
+                </div>
+                <span className="text-[11px] font-mono text-[var(--fs-success)] font-semibold">
+                  {verifiedReadinessCount} / {readinessItems.length || 6} Ready
+                </span>
+              </div>
+              <div className="divide-y divide-[var(--fs-border)]">
+                {readinessItems.map(item => (
+                  <div
+                    key={item.id}
+                    className="py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
+                  >
+                    <div>
+                      <div className="font-semibold text-[var(--fs-text)]">{item.title}</div>
+                      <span className="text-[10px] font-mono text-[var(--fs-text-muted)]">
+                        {item.category}
+                      </span>
+                    </div>
+                    <select
+                      aria-label={`Status for ${item.title}`}
+                      value={item.status}
+                      onChange={e =>
+                        handleUpdateReadinessStatus(
+                          item.id,
+                          e.target.value as TaxReadinessItem['status']
+                        )
+                      }
+                      className="fs-input w-auto py-1 text-[11px]"
+                    >
+                      <option value="NOT_UPLOADED">Not Uploaded</option>
+                      <option value="UPLOADED">Uploaded</option>
+                      <option value="NEEDS_REVIEW">Needs Review</option>
+                      <option value="VERIFIED_BY_USER">Verified</option>
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="lg:col-span-5 fs-card p-6 space-y-4">
+              <div className="flex items-center gap-2">
+                <CalendarClock className="h-4 w-4 text-[var(--fs-warning)]" />
+                <h3 className="text-sm font-bold text-[var(--fs-text)]">CBDT Tax Calendar Reminders</h3>
+              </div>
+              <div className="space-y-3">
+                {cbdtDeadlines.map(dl => (
+                  <div
+                    key={dl.title}
+                    className="p-3 rounded-xl bg-[var(--fs-surface-secondary)] border border-[var(--fs-border)] space-y-0.5"
+                  >
+                    <div className="text-[11px] font-mono font-bold text-[var(--fs-accent)]">
+                      {dl.date}
+                    </div>
+                    <div className="text-xs font-medium text-[var(--fs-text)]">{dl.title}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
           {calculations.length > 0 && (
-            <div className="max-w-4xl rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-3">
-              <h3 className="text-sm font-bold text-[#F5F7F5]">Saved Tax Calculation History</h3>
-              <div className="divide-y divide-[#28443C]/40 text-xs">
+            <div className="max-w-5xl fs-card p-6 space-y-3">
+              <h3 className="text-sm font-bold text-[var(--fs-text)]">Saved Tax Calculation History</h3>
+              <div className="divide-y divide-[var(--fs-border)] text-xs">
                 {calculations.slice(0, 6).map(c => (
                   <div key={c.id} className="py-2.5 flex items-center justify-between">
                     <div>
-                      <div className="font-semibold text-[#F5F7F5]">
+                      <div className="font-semibold text-[var(--fs-text)]">
                         FY {c.financialYear} ({c.rulesetVersion}) · Gross {formatINR(c.grossIncome)}
                       </div>
-                      <div className="text-[10px] text-[#718D83]">
+                      <div className="text-[10px] text-[var(--fs-text-muted)]">
                         Old: {formatINR(c.oldRegimeTotalTax)} vs New: {formatINR(c.newRegimeTotalTax)}
                       </div>
                     </div>
                     <div className="text-right">
-                      <span className="font-bold text-[#55C99A]">{c.recommendedRegime} Regime</span>
-                      <div className="text-[10px] text-[#A7C1B8]">Saves {formatINR(c.estimatedSavings)}</div>
+                      <span className="font-bold text-[var(--fs-success)]">{c.recommendedRegime} Regime</span>
+                      <div className="text-[10px] text-[var(--fs-text-body)]">
+                        Saves {formatINR(c.estimatedSavings)}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -502,38 +669,48 @@ export const TaxModule: React.FC<TaxModuleProps> = ({
       {/* SUBVIEW 2: DEDUCTIONS & PROOFS */}
       {subview === 'deductions' && (
         <div className="space-y-6 max-w-4xl">
-          <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-4">
+          <div className="fs-card p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-[#F5F7F5]">Organized Tax Deductions ({financialYear})</h3>
+              <h3 className="text-sm font-bold text-[var(--fs-text)]">
+                Organized Tax Deductions ({financialYear})
+              </h3>
               <button
                 onClick={() => setShowDeductionModal(true)}
-                className="rounded-lg bg-[#A8E6CE] px-3 py-1.5 text-xs font-bold text-[#0B1C19]"
+                className="fs-btn-primary px-3 py-1.5 text-xs"
               >
                 + Add Deduction
               </button>
             </div>
 
             {fyDeductions.length === 0 ? (
-              <div className="p-6 rounded-xl bg-[#0B1C19] border border-[#28443C] text-center text-xs text-[#718D83]">
-                No deductions logged for FY {financialYear}. Add Section 80C, 80D, or NPS investments to compare regimes accurately.
-              </div>
+              <EmptyStateCard
+                variant="tax"
+                title={`No deductions logged for FY ${financialYear}`}
+                description="Add Section 80C (PPF, ELSS), Section 80D health insurance, or NPS investments to accurately compare Old vs New regimes."
+                actionLabel="Add Deduction"
+                onAction={() => setShowDeductionModal(true)}
+              />
             ) : (
-              <div className="divide-y divide-[#28443C]/50">
+              <div className="divide-y divide-[var(--fs-border)]">
                 {fyDeductions.map(d => (
                   <div key={d.id} className="py-3 flex items-center justify-between text-xs">
                     <div>
-                      <div className="font-bold text-[#F5F7F5]">{d.category}</div>
-                      <div className="text-[#A7C1B8]">{d.description} (Cap: {formatINR(d.applicableLimit)})</div>
+                      <div className="font-bold text-[var(--fs-text)]">{d.category}</div>
+                      <div className="text-[var(--fs-text-body)]">
+                        {d.description} (Cap: {formatINR(d.applicableLimit)})
+                      </div>
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="text-right">
-                        <div className="font-bold text-[#55C99A] tabular-nums">{formatINR(d.claimedAmount)}</div>
-                        <div className="text-[10px] text-[#718D83]">{d.verificationStatus}</div>
+                        <div className="font-bold font-mono-num text-[var(--fs-success)] tabular-nums">
+                          {formatINR(d.claimedAmount)}
+                        </div>
+                        <div className="text-[10px] text-[var(--fs-text-muted)]">{d.verificationStatus}</div>
                       </div>
                       <button
                         onClick={() => handleDeleteDeduction(d.id)}
-                        className="p-1 text-[#718D83] hover:text-[#EB7676]"
-                        title="Delete Deduction"
+                        aria-label={`Delete ${d.category}`}
+                        className="p-1 text-[var(--fs-text-muted)] hover:text-[var(--fs-danger)]"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -549,13 +726,14 @@ export const TaxModule: React.FC<TaxModuleProps> = ({
       {/* SUBVIEW 3: DOCUMENTS */}
       {subview === 'documents' && (
         <div className="space-y-6 max-w-4xl">
-          <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-4">
+          <div className="fs-card p-6 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <h3 className="text-sm font-bold text-[#F5F7F5]">Private Tax Document Vault</h3>
+              <h3 className="text-sm font-bold text-[var(--fs-text)]">Private Tax Document Vault</h3>
               <select
+                aria-label="Document Category"
                 value={docCategory}
                 onChange={e => setDocCategory(e.target.value as TaxDocument['category'])}
-                className="rounded-lg bg-[#0B1C19] border border-[#28443C] px-3 py-1.5 text-xs text-[#F5F7F5]"
+                className="fs-input w-auto py-1.5"
               >
                 <option value="Form 16">Form 16</option>
                 <option value="Salary Slips">Salary Slips</option>
@@ -565,16 +743,20 @@ export const TaxModule: React.FC<TaxModuleProps> = ({
               </select>
             </div>
 
-            <div className="p-8 border-2 border-dashed border-[#28443C] rounded-xl text-center space-y-3">
-              <FileText className="h-8 w-8 mx-auto text-[#718D83]" />
-              <div className="text-xs font-semibold text-[#F5F7F5]">Upload Form 16, Rent Receipts & Investment Proofs</div>
-              <p className="text-[11px] text-[#718D83]">Accepted: PDF, PNG, JPG (Max 10MB). Owner-isolated vault storage.</p>
+            <div className="p-8 border-2 border-dashed border-[var(--fs-border)] bg-[var(--fs-surface-secondary)] rounded-xl text-center space-y-3">
+              <FileText className="h-8 w-8 mx-auto text-[var(--fs-accent)]" />
+              <div className="text-xs font-semibold text-[var(--fs-text)]">
+                Upload Form 16, Rent Receipts &amp; Investment Proofs
+              </div>
+              <p className="text-[11px] text-[var(--fs-text-muted)]">
+                Accepted: PDF, PNG, JPG (Max 10MB). Owner-isolated vault storage.
+              </p>
               <input
                 type="file"
                 accept=".pdf,.png,.jpg,.jpeg"
                 id="tax-doc-upload"
                 className="hidden"
-                onChange={(e) => {
+                onChange={e => {
                   const file = e.target.files?.[0];
                   if (file) {
                     handleUploadTaxDocument(file);
@@ -584,14 +766,14 @@ export const TaxModule: React.FC<TaxModuleProps> = ({
               />
               <label
                 htmlFor="tax-doc-upload"
-                className="inline-flex items-center gap-2 cursor-pointer rounded-lg bg-[#A8E6CE] px-4 py-2 text-xs font-bold text-[#0B1C19] hover:bg-[#72C8B0]"
+                className="fs-btn-primary inline-flex items-center gap-2 cursor-pointer px-4 py-2 text-xs"
               >
                 {isUploadingDoc && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 <span>{isUploadingDoc ? 'Uploading to Vault...' : 'Upload Tax Document'}</span>
               </label>
 
               {docUploadStatus && (
-                <div className="mt-4 p-3 rounded-xl bg-[#55C99A]/10 border border-[#55C99A]/40 text-xs text-[#55C99A] flex items-center justify-center gap-2">
+                <div className="mt-4 p-3 rounded-xl bg-[var(--fs-success)]/10 border border-[var(--fs-success)]/30 text-xs text-[var(--fs-success)] flex items-center justify-center gap-2">
                   <CheckCircle className="h-4 w-4 shrink-0" />
                   <span>{docUploadStatus}</span>
                 </div>
@@ -600,31 +782,36 @@ export const TaxModule: React.FC<TaxModuleProps> = ({
 
             {/* Stored Documents List */}
             <div className="space-y-2 pt-2">
-              <h4 className="text-xs font-bold text-[#F5F7F5]">Stored Tax Documents ({documents.length})</h4>
+              <h4 className="text-xs font-bold text-[var(--fs-text)]">
+                Stored Tax Documents ({documents.length})
+              </h4>
               {documents.length === 0 ? (
-                <p className="text-xs text-[#718D83]">No documents uploaded to your tax vault yet.</p>
+                <p className="text-xs text-[var(--fs-text-muted)]">
+                  No documents uploaded to your tax vault yet.
+                </p>
               ) : (
-                <div className="divide-y divide-[#28443C]/40">
+                <div className="divide-y divide-[var(--fs-border)]">
                   {documents.map(doc => (
                     <div key={doc.id} className="py-2.5 flex items-center justify-between text-xs">
                       <div>
-                        <div className="font-semibold text-[#F5F7F5]">{doc.name}</div>
-                        <div className="text-[10px] text-[#718D83]">
-                          {doc.category} · FY {doc.financialYear} · {doc.fileSize} · {doc.uploadedAt.split('T')[0]}
+                        <div className="font-semibold text-[var(--fs-text)]">{doc.name}</div>
+                        <div className="text-[10px] text-[var(--fs-text-muted)]">
+                          {doc.category} · FY {doc.financialYear} · {doc.fileSize} ·{' '}
+                          {doc.uploadedAt.split('T')[0]}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleDownloadTaxDocument(doc)}
-                          className="inline-flex items-center gap-1 rounded-lg bg-[#16352E] border border-[#28443C] px-2.5 py-1 text-[11px] text-[#A8E6CE] hover:border-[#72C8B0]"
+                          className="fs-btn-secondary inline-flex items-center gap-1 px-2.5 py-1 text-[11px]"
                         >
                           <Download className="h-3 w-3" />
                           <span>Download</span>
                         </button>
                         <button
                           onClick={() => handleDeleteTaxDocument(doc.id)}
-                          className="p-1 text-[#718D83] hover:text-[#EB7676]"
-                          title="Delete Document"
+                          aria-label={`Delete ${doc.name}`}
+                          className="p-1 text-[var(--fs-text-muted)] hover:text-[var(--fs-danger)]"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -641,36 +828,47 @@ export const TaxModule: React.FC<TaxModuleProps> = ({
       {/* SUBVIEW 4: SUMMARY */}
       {subview === 'summary' && (
         <div className="space-y-6 max-w-3xl">
-          <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-4">
-            <h3 className="text-sm font-bold text-[#F5F7F5]">Tax Position Summary (FY {financialYear})</h3>
+          <div className="fs-card p-6 space-y-4">
+            <h3 className="text-sm font-bold text-[var(--fs-text)]">
+              Tax Position Summary (FY {financialYear})
+            </h3>
             <div className="space-y-2 text-xs">
-              <div className="flex justify-between py-1 border-b border-[#28443C]">
-                <span className="text-[#A7C1B8]">Applicable Ruleset:</span>
-                <span className="font-mono text-[#F5F7F5]">{newRegimeTax.rulesetVersion}</span>
+              <div className="flex justify-between py-1.5 border-b border-[var(--fs-border)]">
+                <span className="text-[var(--fs-text-body)]">Applicable Ruleset:</span>
+                <span className="font-mono text-[var(--fs-text)]">{newRegimeTax.rulesetVersion}</span>
               </div>
-              <div className="flex justify-between py-1 border-b border-[#28443C]">
-                <span className="text-[#A7C1B8]">Total Gross Income:</span>
-                <span className="font-semibold text-[#F5F7F5] tabular-nums">{formatINR(grossIncome)}</span>
+              <div className="flex justify-between py-1.5 border-b border-[var(--fs-border)]">
+                <span className="text-[var(--fs-text-body)]">Total Gross Income:</span>
+                <span className="font-semibold font-mono-num text-[var(--fs-text)] tabular-nums">
+                  {formatINR(grossIncome)}
+                </span>
               </div>
-              <div className="flex justify-between py-1 border-b border-[#28443C]">
-                <span className="text-[#A7C1B8]">Recommended Regime:</span>
-                <span className="font-bold text-[#55C99A]">{isNewBetter ? 'New Regime (Sec 115BAC)' : 'Old Regime'}</span>
+              <div className="flex justify-between py-1.5 border-b border-[var(--fs-border)]">
+                <span className="text-[var(--fs-text-body)]">Recommended Regime:</span>
+                <span className="font-bold text-[var(--fs-success)]">
+                  {isNewBetter ? 'New Regime (Sec 115BAC)' : 'Old Regime'}
+                </span>
               </div>
-              <div className="flex justify-between py-1 border-b border-[#28443C]">
-                <span className="text-[#A7C1B8]">Estimated Tax Liability:</span>
-                <span className="font-bold text-[#A8E6CE] tabular-nums">
+              <div className="flex justify-between py-1.5 border-b border-[var(--fs-border)]">
+                <span className="text-[var(--fs-text-body)]">Estimated Tax Liability:</span>
+                <span className="font-bold font-mono-num text-[var(--fs-accent)] tabular-nums">
                   {formatINR(isNewBetter ? newRegimeTax.totalTax : oldRegimeTax.totalTax)}
                 </span>
               </div>
-              <div className="flex justify-between py-1 border-b border-[#28443C]">
-                <span className="text-[#A7C1B8]">Effective Tax Rate:</span>
-                <span className="font-semibold text-[#F5F7F5]">{isNewBetter ? newRegimeTax.effectiveRate : oldRegimeTax.effectiveRate}%</span>
+              <div className="flex justify-between py-1.5 border-b border-[var(--fs-border)]">
+                <span className="text-[var(--fs-text-body)]">Effective Tax Rate:</span>
+                <span className="font-semibold font-mono-num text-[var(--fs-text)]">
+                  {isNewBetter ? newRegimeTax.effectiveRate : oldRegimeTax.effectiveRate}%
+                </span>
+              </div>
+              <div className="flex justify-between py-1.5 border-b border-[var(--fs-border)]">
+                <span className="text-[var(--fs-text-body)]">Readiness Checklist Progress:</span>
+                <span className="font-semibold font-mono-num text-[var(--fs-text)]">
+                  {verifiedReadinessCount} / {readinessItems.length || 6} items completed
+                </span>
               </div>
             </div>
-            <button
-              onClick={() => window.print()}
-              className="rounded-xl border border-[#28443C] bg-[#16352E] px-4 py-2 text-xs font-semibold text-[#A8E6CE]"
-            >
+            <button onClick={() => window.print()} className="fs-btn-secondary px-4 py-2 text-xs">
               Export Summary / Print
             </button>
           </div>
@@ -679,16 +877,20 @@ export const TaxModule: React.FC<TaxModuleProps> = ({
 
       {/* Add Deduction Modal */}
       {showDeductionModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-4 shadow-2xl">
-            <h3 className="text-base font-bold text-[#F5F7F5]">Add Tax Deduction (FY {financialYear})</h3>
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-md fs-card p-6 space-y-4 shadow-2xl">
+            <h3 className="text-base font-bold text-[var(--fs-text)]">
+              Add Tax Deduction (FY {financialYear})
+            </h3>
             <form onSubmit={handleAddDeduction} className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Deduction Section</label>
+                <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">
+                  Deduction Section
+                </label>
                 <select
                   value={newCat}
                   onChange={e => setNewCat(e.target.value as TaxDeduction['category'])}
-                  className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                  className="fs-input"
                 >
                   <option value="Section 80C">Section 80C (PPF, ELSS, EPF - Up to ₹1.5L)</option>
                   <option value="Section 80D">Section 80D (Health Insurance)</option>
@@ -698,39 +900,40 @@ export const TaxModule: React.FC<TaxModuleProps> = ({
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Description</label>
+                <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">
+                  Description
+                </label>
                 <input
                   type="text"
                   value={newDesc}
                   onChange={e => setNewDesc(e.target.value)}
                   placeholder="e.g. PPF Account Deposit"
-                  className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                  className="fs-input"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Claimed Amount (₹)</label>
+                <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">
+                  Claimed Amount (₹)
+                </label>
                 <input
                   type="number"
                   min="1"
                   value={newClaim}
                   onChange={e => setNewClaim(e.target.value)}
                   placeholder="50000"
-                  className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                  className="fs-input font-mono-num"
                   required
                 />
               </div>
-              <div className="flex justify-end gap-2 pt-3 border-t border-[#28443C]">
+              <div className="flex justify-end gap-2 pt-3 border-t border-[var(--fs-border)]">
                 <button
                   type="button"
                   onClick={() => setShowDeductionModal(false)}
-                  className="rounded-xl border border-[#28443C] px-4 py-2 text-xs text-[#718D83]"
+                  className="fs-btn-secondary px-4 py-2 text-xs"
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  className="rounded-xl bg-[#A8E6CE] px-4 py-2 text-xs font-bold text-[#0B1C19]"
-                >
+                <button type="submit" className="fs-btn-primary px-4 py-2 text-xs">
                   Save Deduction
                 </button>
               </div>
@@ -739,8 +942,8 @@ export const TaxModule: React.FC<TaxModuleProps> = ({
         </div>
       )}
 
-      <div className="rounded-xl border border-[#28443C] bg-[#16352E]/30 p-4 text-xs text-[#718D83] flex items-center gap-3">
-        <ShieldCheck className="h-5 w-5 text-[#A8E6CE] shrink-0" />
+      <div className="fs-card-secondary p-4 text-xs text-[var(--fs-text-muted)] flex items-center gap-3">
+        <ShieldCheck className="h-5 w-5 text-[var(--fs-accent)] shrink-0" />
         <p>
           Tax calculations are indicative and must be verified against applicable official Indian Income Tax rules and professional chartered accountant advice.
         </p>

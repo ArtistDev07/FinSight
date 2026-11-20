@@ -168,7 +168,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
 
   if (loading) {
     return (
-      <div className="p-6 md:p-8 max-w-7xl mx-auto text-xs text-[#A7C1B8]">
+      <div className="p-6 md:p-8 max-w-7xl mx-auto text-xs text-[var(--fs-text-body)]">
         Loading verified admin telemetry...
       </div>
     );
@@ -177,15 +177,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
   if (error || !data) {
     return (
       <div className="p-6 md:p-8 max-w-3xl mx-auto">
-        <div className="rounded-2xl border border-[#EB7676]/40 bg-[#102722] p-6 space-y-3">
-          <div className="flex items-center gap-2 text-[#EB7676]">
+        <div className="fs-card border-[var(--fs-danger)]/40 p-6 space-y-3">
+          <div className="flex items-center gap-2 text-[var(--fs-danger)]">
             <AlertCircle className="h-5 w-5" />
             <h2 className="text-sm font-bold">Admin Console Access Denied</h2>
           </div>
-          <p className="text-xs text-[#A7C1B8]">{error || 'Insufficient permissions.'}</p>
+          <p className="text-xs text-[var(--fs-text-body)]">{error || 'Insufficient permissions.'}</p>
           <button
             onClick={() => onNavigate('/app/dashboard')}
-            className="rounded-xl bg-[#A8E6CE] px-4 py-2 text-xs font-bold text-[#0B1C19]"
+            className="fs-btn-primary px-4 py-2 text-xs"
           >
             Return to Dashboard
           </button>
@@ -195,33 +195,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
   }
 
   return (
-    <div className="p-6 md:p-8 space-y-6 max-w-7xl mx-auto">
-      <div className="border-b border-[#28443C] pb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+      <div className="border-b border-[var(--fs-border)] pb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <Shield className="h-5 w-5 text-[#E5B764]" />
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#F5F7F5] tracking-tight">
+            <Shield className="h-5 w-5 text-[var(--fs-warning)]" />
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-[var(--fs-text)] tracking-tight">
               Administration Console
             </h1>
           </div>
-          <p className="text-xs text-[#A7C1B8] mt-1">
+          <p className="text-xs text-[var(--fs-text-body)] mt-1">
             System telemetry, user status governance, CBDT tax rulesets, NSE market archives, and Gemini AI usage logs.
           </p>
         </div>
-        <span className="rounded-lg bg-[#E5B764]/20 border border-[#E5B764] px-3 py-1 text-xs font-bold text-[#E5B764] self-start sm:self-auto">
+        <span className="rounded-lg bg-[var(--fs-warning)]/15 border border-[var(--fs-warning)]/40 px-3 py-1 text-xs font-bold text-[var(--fs-warning)] self-start sm:self-auto">
           Verified Admin Access
         </span>
       </div>
 
       {feedback && (
-        <div className="p-3.5 rounded-xl bg-[#55C99A]/10 border border-[#55C99A]/40 text-xs text-[#55C99A] flex items-center gap-2">
-          <CheckCircle className="h-4 w-4" />
+        <div className="p-3.5 rounded-xl bg-[var(--fs-success)]/10 border border-[var(--fs-success)]/30 text-xs text-[var(--fs-success)] flex items-center gap-2">
+          <CheckCircle className="h-4 w-4 shrink-0" />
           <span>{feedback}</span>
         </div>
       )}
 
       {/* Sub-Tabs */}
-      <div className="flex items-center gap-2 border-b border-[#28443C] pb-2 overflow-x-auto whitespace-nowrap">
+      <div className="flex items-center gap-2 border-b border-[var(--fs-border)] pb-2 overflow-x-auto whitespace-nowrap">
         {[
           { key: 'overview', label: 'Overview & Audit Logs' },
           { key: 'users', label: 'Users Governance' },
@@ -231,10 +231,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
           <button
             key={t.key}
             onClick={() => setActiveTab(t.key as AdminTab)}
-            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
               activeTab === t.key
-                ? 'bg-[#16352E] text-[#A8E6CE] border border-[#28443C]'
-                : 'text-[#A7C1B8] hover:text-[#F5F7F5]'
+                ? 'bg-[var(--fs-surface-secondary)] text-[var(--fs-text)] border border-[var(--fs-border)]'
+                : 'text-[var(--fs-text-body)] hover:text-[var(--fs-text)]'
             }`}
           >
             {t.label}
@@ -244,67 +244,83 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
 
       {activeTab === 'overview' && (
         <>
-          {/* Metrics Row */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-5 space-y-1">
-              <div className="flex items-center justify-between text-xs text-[#718D83]">
+            <div className="fs-card p-5 space-y-1">
+              <div className="flex items-center justify-between text-xs text-[var(--fs-text-muted)]">
                 <span>Registered Users</span>
-                <Users className="h-4 w-4 text-[#A8E6CE]" />
+                <Users className="h-4 w-4 text-[var(--fs-accent)]" />
               </div>
-              <div className="text-2xl font-bold text-[#F5F7F5] tabular-nums">{data.totalUsers}</div>
-              <span className="text-[10px] text-[#55C99A]">{data.activeUsers} Active</span>
+              <div className="text-2xl font-bold font-mono-num text-[var(--fs-text)] tabular-nums">
+                {data.totalUsers}
+              </div>
+              <span className="text-[10px] text-[var(--fs-success)]">{data.activeUsers} Active</span>
             </div>
 
-            <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-5 space-y-1">
-              <div className="flex items-center justify-between text-xs text-[#718D83]">
+            <div className="fs-card p-5 space-y-1">
+              <div className="flex items-center justify-between text-xs text-[var(--fs-text-muted)]">
                 <span>Gemini AI Invocations</span>
-                <Cpu className="h-4 w-4 text-[#A8E6CE]" />
+                <Cpu className="h-4 w-4 text-[var(--fs-accent)]" />
               </div>
-              <div className="text-2xl font-bold text-[#A8E6CE] tabular-nums">{data.aiRequests}</div>
-              <span className={`text-[10px] ${data.geminiConfigured ? 'text-[#55C99A]' : 'text-[#E5B764]'}`}>
-                {data.aiModel || 'gemini-4-hydrogen'} · {data.geminiConfigured ? 'Key Configured' : 'Key Missing'}
+              <div className="text-2xl font-bold font-mono-num text-[var(--fs-accent)] tabular-nums">
+                {data.aiRequests}
+              </div>
+              <span
+                className={`text-[10px] ${
+                  data.geminiConfigured ? 'text-[var(--fs-success)]' : 'text-[var(--fs-warning)]'
+                }`}
+              >
+                {data.aiModel || 'gemini-4-hydrogen'} ·{' '}
+                {data.geminiConfigured ? 'Key Configured' : 'Key Missing'}
               </span>
             </div>
 
-            <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-5 space-y-1">
-              <div className="flex items-center justify-between text-xs text-[#718D83]">
+            <div className="fs-card p-5 space-y-1">
+              <div className="flex items-center justify-between text-xs text-[var(--fs-text-muted)]">
                 <span>File Jobs Processed</span>
-                <FileCheck className="h-4 w-4 text-[#55C99A]" />
+                <FileCheck className="h-4 w-4 text-[var(--fs-success)]" />
               </div>
-              <div className="text-2xl font-bold text-[#F5F7F5] tabular-nums">{data.fileProcessingJobs}</div>
-              <span className="text-[10px] text-[#718D83]">Statements & Vault Docs</span>
+              <div className="text-2xl font-bold font-mono-num text-[var(--fs-text)] tabular-nums">
+                {data.fileProcessingJobs}
+              </div>
+              <span className="text-[10px] text-[var(--fs-text-muted)]">Statements &amp; Vault Docs</span>
             </div>
 
-            <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-5 space-y-1">
-              <div className="flex items-center justify-between text-xs text-[#718D83]">
+            <div className="fs-card p-5 space-y-1">
+              <div className="flex items-center justify-between text-xs text-[var(--fs-text-muted)]">
                 <span>Tax Rules Version</span>
-                <Database className="h-4 w-4 text-[#7BB9DC]" />
+                <Database className="h-4 w-4 text-[var(--fs-info)]" />
               </div>
-              <div className="text-xl font-bold text-[#F5F7F5]">{data.activeTaxRuleset || 'CBDT v2025.2'}</div>
-              <span className="text-[10px] text-[#55C99A]">Active & Verified</span>
+              <div className="text-xl font-bold text-[var(--fs-text)]">
+                {data.activeTaxRuleset || 'CBDT v2025.2'}
+              </div>
+              <span className="text-[10px] text-[var(--fs-success)]">Active &amp; Verified</span>
             </div>
 
-            <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-5 space-y-1">
-              <div className="flex items-center justify-between text-xs text-[#718D83]">
+            <div className="fs-card p-5 space-y-1">
+              <div className="flex items-center justify-between text-xs text-[var(--fs-text-muted)]">
                 <span>AI / System Errors</span>
-                <Activity className="h-4 w-4 text-[#55C99A]" />
+                <Activity className="h-4 w-4 text-[var(--fs-success)]" />
               </div>
-              <div className={`text-2xl font-bold tabular-nums ${data.systemErrors > 0 ? 'text-[#E5B764]' : 'text-[#55C99A]'}`}>
+              <div
+                className={`text-2xl font-bold font-mono-num tabular-nums ${
+                  data.systemErrors > 0 ? 'text-[var(--fs-warning)]' : 'text-[var(--fs-success)]'
+                }`}
+              >
                 {data.systemErrors}
               </div>
-              <span className="text-[10px] text-[#718D83]">Logged telemetry errors</span>
+              <span className="text-[10px] text-[var(--fs-text-muted)]">Logged telemetry errors</span>
             </div>
           </div>
 
           {/* Audit Logs */}
-          <div className="rounded-2xl border border-[#28443C] bg-[#102722] overflow-hidden">
-            <div className="p-4 border-b border-[#28443C] flex items-center justify-between">
-              <h3 className="text-sm font-bold text-[#F5F7F5]">Administrative Audit Logs</h3>
-              <span className="text-xs text-[#718D83]">Immutable security trail</span>
+          <div className="fs-card overflow-hidden">
+            <div className="p-4 border-b border-[var(--fs-border)] flex items-center justify-between">
+              <h3 className="text-sm font-bold text-[var(--fs-text)]">Administrative Audit Logs</h3>
+              <span className="text-xs text-[var(--fs-text-muted)]">Immutable security trail</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="bg-[#16352E]/40 border-b border-[#28443C] text-[#718D83]">
+                <thead className="bg-[var(--fs-surface-secondary)] border-b border-[var(--fs-border)] text-[var(--fs-text-muted)]">
                   <tr>
                     <th className="py-3 px-4 font-medium">Timestamp</th>
                     <th className="py-3 px-4 font-medium">Actor</th>
@@ -312,14 +328,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                     <th className="py-3 px-4 font-medium text-right">Outcome</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#28443C]/40">
+                <tbody className="divide-y divide-[var(--fs-border)]">
                   {(data.recentAuditLogs || []).map(log => (
-                    <tr key={log.id} className="hover:bg-[#16352E]/20">
-                      <td className="py-3 px-4 text-[#718D83] whitespace-nowrap">{log.createdAt}</td>
-                      <td className="py-3 px-4 font-semibold text-[#F5F7F5]">{log.actorEmail}</td>
-                      <td className="py-3 px-4 font-mono text-[#A8E6CE]">{log.action}</td>
+                    <tr key={log.id} className="hover:bg-[var(--fs-surface-secondary)]/50">
+                      <td className="py-3 px-4 text-[var(--fs-text-muted)] whitespace-nowrap">
+                        {log.createdAt}
+                      </td>
+                      <td className="py-3 px-4 font-semibold text-[var(--fs-text)]">
+                        {log.actorEmail}
+                      </td>
+                      <td className="py-3 px-4 font-mono text-[var(--fs-accent)]">{log.action}</td>
                       <td className="py-3 px-4 text-right">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#55C99A]/20 text-[#55C99A]">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--fs-success)]/15 text-[var(--fs-success)]">
                           {log.outcome}
                         </span>
                       </td>
@@ -333,13 +353,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
       )}
 
       {activeTab === 'users' && (
-        <div className="rounded-2xl border border-[#28443C] bg-[#102722] overflow-hidden">
-          <div className="p-4 border-b border-[#28443C]">
-            <h3 className="text-sm font-bold text-[#F5F7F5]">Registered Accounts ({users.length})</h3>
+        <div className="fs-card overflow-hidden">
+          <div className="p-4 border-b border-[var(--fs-border)]">
+            <h3 className="text-sm font-bold text-[var(--fs-text)]">
+              Registered Accounts ({users.length})
+            </h3>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-[#16352E]/40 border-b border-[#28443C] text-[#718D83]">
+              <thead className="bg-[var(--fs-surface-secondary)] border-b border-[var(--fs-border)] text-[var(--fs-text-muted)]">
                 <tr>
                   <th className="py-3 px-4">User</th>
                   <th className="py-3 px-4">UID</th>
@@ -348,26 +370,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                   <th className="py-3 px-4 text-right">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#28443C]/40">
+              <tbody className="divide-y divide-[var(--fs-border)]">
                 {users.map(u => (
-                  <tr key={u.uid} className="hover:bg-[#16352E]/20">
+                  <tr key={u.uid} className="hover:bg-[var(--fs-surface-secondary)]/50">
                     <td className="py-3 px-4">
-                      <div className="font-bold text-[#F5F7F5]">{u.fullName}</div>
-                      <div className="text-[10px] text-[#718D83]">{u.email}</div>
+                      <div className="font-bold text-[var(--fs-text)]">{u.fullName}</div>
+                      <div className="text-[10px] text-[var(--fs-text-muted)]">{u.email}</div>
                     </td>
-                    <td className="py-3 px-4 font-mono text-[11px] text-[#A7C1B8]">{u.uid}</td>
-                    <td className="py-3 px-4 text-[#A8E6CE] font-semibold">{u.role}</td>
+                    <td className="py-3 px-4 font-mono text-[11px] text-[var(--fs-text-body)]">
+                      {u.uid}
+                    </td>
+                    <td className="py-3 px-4 text-[var(--fs-accent)] font-semibold">{u.role}</td>
                     <td className="py-3 px-4">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                        u.accountStatus === 'ACTIVE' ? 'bg-[#55C99A]/20 text-[#55C99A]' : 'bg-[#EB7676]/20 text-[#EB7676]'
-                      }`}>
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          u.accountStatus === 'ACTIVE'
+                            ? 'bg-[var(--fs-success)]/15 text-[var(--fs-success)]'
+                            : 'bg-[var(--fs-danger)]/15 text-[var(--fs-danger)]'
+                        }`}
+                      >
                         {u.accountStatus}
                       </span>
                     </td>
                     <td className="py-3 px-4 text-right">
                       <button
                         onClick={() => handleToggleUserStatus(u)}
-                        className="rounded-lg border border-[#28443C] bg-[#16352E] px-2.5 py-1 text-[11px] text-[#A8E6CE] hover:border-[#72C8B0]"
+                        className="fs-btn-secondary px-2.5 py-1 text-[11px]"
                       >
                         {u.accountStatus === 'ACTIVE' ? 'Suspend' : 'Activate'}
                       </button>
@@ -382,21 +410,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
 
       {activeTab === 'rules-markets' && (
         <div className="space-y-6">
-          <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-4">
-            <h3 className="text-sm font-bold text-[#F5F7F5]">CBDT Tax Rulesets</h3>
+          <div className="fs-card p-6 space-y-4">
+            <h3 className="text-sm font-bold text-[var(--fs-text)]">CBDT Tax Rulesets</h3>
             <div className="space-y-2.5">
               {taxRules.map(rule => (
-                <div key={rule.id} className="p-4 rounded-xl bg-[#0B1C19] border border-[#28443C] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div
+                  key={rule.id}
+                  className="p-4 rounded-xl bg-[var(--fs-surface-secondary)] border border-[var(--fs-border)] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                >
                   <div>
-                    <div className="font-bold text-[#F5F7F5]">
+                    <div className="font-bold text-[var(--fs-text)]">
                       FY {rule.financialYear} (AY {rule.assessmentYear}) · {rule.version}
                     </div>
-                    <div className="text-[11px] text-[#718D83] mt-0.5">{rule.sourceNote}</div>
+                    <div className="text-[11px] text-[var(--fs-text-muted)] mt-0.5">
+                      {rule.sourceNote}
+                    </div>
                   </div>
                   <button
                     onClick={() => handleToggleTaxRule(rule)}
                     className={`rounded-lg px-3 py-1.5 text-[11px] font-bold ${
-                      rule.active ? 'bg-[#55C99A]/20 text-[#55C99A] border border-[#55C99A]/40' : 'bg-[#28443C] text-[#A7C1B8]'
+                      rule.active
+                        ? 'bg-[var(--fs-success)]/15 text-[var(--fs-success)] border border-[var(--fs-success)]/30'
+                        : 'fs-btn-secondary'
                     }`}
                   >
                     {rule.active ? 'Active' : 'Inactive (Enable)'}
@@ -407,16 +442,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
           </div>
 
           {marketInfo && (
-            <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-4">
+            <div className="fs-card p-6 space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold text-[#F5F7F5]">Market Data Archive Status</h3>
-                <span className="text-xs text-[#A8E6CE] font-semibold">
-                  {marketInfo.providerStatus.providerMode} (Cutoff: {marketInfo.providerStatus.archiveCutoffDate})
+                <h3 className="text-sm font-bold text-[var(--fs-text)]">
+                  Market Data Archive Status
+                </h3>
+                <span className="text-xs text-[var(--fs-accent)] font-semibold">
+                  {marketInfo.providerStatus.providerMode} (Cutoff:{' '}
+                  {marketInfo.providerStatus.archiveCutoffDate})
                 </span>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
-                  <thead className="text-[#718D83] border-b border-[#28443C]">
+                  <thead className="text-[var(--fs-text-muted)] border-b border-[var(--fs-border)]">
                     <tr>
                       <th className="py-2 px-3">Symbol</th>
                       <th className="py-2 px-3">Exchange</th>
@@ -425,14 +463,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                       <th className="py-2 px-3 text-right">Source</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#28443C]/40">
+                  <tbody className="divide-y divide-[var(--fs-border)]">
                     {marketInfo.instruments.map(inst => (
                       <tr key={inst.symbol}>
-                        <td className="py-2 px-3 font-bold text-[#F5F7F5]">{inst.symbol}</td>
-                        <td className="py-2 px-3 text-[#A7C1B8]">{inst.exchange}</td>
-                        <td className="py-2 px-3 text-right tabular-nums text-[#F5F7F5]">₹{inst.currentPrice.toLocaleString('en-IN')}</td>
-                        <td className="py-2 px-3 text-right text-[#718D83]">{inst.lastUpdatedDate}</td>
-                        <td className="py-2 px-3 text-right font-mono text-[10px] text-[#A8E6CE]">{inst.historicalStatus}</td>
+                        <td className="py-2 px-3 font-bold text-[var(--fs-text)]">{inst.symbol}</td>
+                        <td className="py-2 px-3 text-[var(--fs-text-body)]">{inst.exchange}</td>
+                        <td className="py-2 px-3 text-right font-mono-num tabular-nums text-[var(--fs-text)]">
+                          ₹{inst.currentPrice.toLocaleString('en-IN')}
+                        </td>
+                        <td className="py-2 px-3 text-right text-[var(--fs-text-muted)]">
+                          {inst.lastUpdatedDate}
+                        </td>
+                        <td className="py-2 px-3 text-right font-mono text-[10px] text-[var(--fs-accent)]">
+                          {inst.historicalStatus}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -446,80 +490,98 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
       {activeTab === 'ai-settings' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {sysSettings && (
-            <form onSubmit={handleSaveSystemSettings} className="lg:col-span-5 rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-4 text-xs">
-              <h3 className="text-sm font-bold text-[#F5F7F5]">Global Platform Settings</h3>
-              <label className="flex items-center justify-between p-3 rounded-xl bg-[#0B1C19] border border-[#28443C] cursor-pointer">
-                <span className="text-[#F5F7F5]">Enable Gemini AI Features</span>
+            <form onSubmit={handleSaveSystemSettings} className="lg:col-span-5 fs-card p-6 space-y-4 text-xs">
+              <h3 className="text-sm font-bold text-[var(--fs-text)]">Global Platform Settings</h3>
+              <label className="flex items-center justify-between p-3 rounded-xl bg-[var(--fs-surface-secondary)] border border-[var(--fs-border)] cursor-pointer">
+                <span className="text-[var(--fs-text)]">Enable Gemini AI Features</span>
                 <input
                   type="checkbox"
                   checked={sysSettings.aiEnabled}
-                  onChange={e => setSysSettings(prev => (prev ? { ...prev, aiEnabled: e.target.checked } : prev))}
+                  onChange={e =>
+                    setSysSettings(prev => (prev ? { ...prev, aiEnabled: e.target.checked } : prev))
+                  }
                 />
               </label>
-              <label className="flex items-center justify-between p-3 rounded-xl bg-[#0B1C19] border border-[#28443C] cursor-pointer">
-                <span className="text-[#F5F7F5]">Maintenance Mode</span>
+              <label className="flex items-center justify-between p-3 rounded-xl bg-[var(--fs-surface-secondary)] border border-[var(--fs-border)] cursor-pointer">
+                <span className="text-[var(--fs-text)]">Maintenance Mode</span>
                 <input
                   type="checkbox"
                   checked={sysSettings.maintenanceMode}
-                  onChange={e => setSysSettings(prev => (prev ? { ...prev, maintenanceMode: e.target.checked } : prev))}
+                  onChange={e =>
+                    setSysSettings(prev =>
+                      prev ? { ...prev, maintenanceMode: e.target.checked } : prev
+                    )
+                  }
                 />
               </label>
               <div>
-                <label className="block text-[#A7C1B8] mb-1">Max Upload Size (MB)</label>
+                <label className="block text-[var(--fs-text-body)] mb-1">Max Upload Size (MB)</label>
                 <input
                   type="number"
                   min={1}
                   max={25}
                   value={sysSettings.maxUploadMb}
                   onChange={e =>
-                    setSysSettings(prev => (prev ? { ...prev, maxUploadMb: Number(e.target.value) || 10 } : prev))
+                    setSysSettings(prev =>
+                      prev ? { ...prev, maxUploadMb: Number(e.target.value) || 10 } : prev
+                    )
                   }
-                  className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-[#F5F7F5]"
+                  className="fs-input font-mono-num"
                 />
               </div>
               <div>
-                <label className="block text-[#A7C1B8] mb-1">Default Financial Year</label>
+                <label className="block text-[var(--fs-text-body)] mb-1">
+                  Default Financial Year
+                </label>
                 <select
                   value={sysSettings.defaultFinancialYear}
                   onChange={e =>
                     setSysSettings(prev =>
-                      prev ? { ...prev, defaultFinancialYear: e.target.value as '2025-26' | '2024-25' } : prev
+                      prev
+                        ? {
+                            ...prev,
+                            defaultFinancialYear: e.target.value as '2025-26' | '2024-25',
+                          }
+                        : prev
                     )
                   }
-                  className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-[#F5F7F5]"
+                  className="fs-input"
                 >
                   <option value="2025-26">2025-26</option>
                   <option value="2024-25">2024-25</option>
                 </select>
               </div>
-              <button
-                type="submit"
-                className="w-full rounded-xl bg-[#A8E6CE] py-2.5 text-xs font-bold text-[#0B1C19] hover:bg-[#72C8B0]"
-              >
+              <button type="submit" className="fs-btn-primary w-full py-2.5 text-xs">
                 Save System Settings
               </button>
             </form>
           )}
 
           {aiUsage && (
-            <div className="lg:col-span-7 rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-4">
+            <div className="lg:col-span-7 fs-card p-6 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-bold text-[#F5F7F5]">Gemini AI Telemetry</h3>
-                  <p className="text-xs text-[#718D83]">Model: {aiUsage.model} · Requests: {aiUsage.totalRequests}</p>
+                  <h3 className="text-sm font-bold text-[var(--fs-text)]">Gemini AI Telemetry</h3>
+                  <p className="text-xs text-[var(--fs-text-muted)]">
+                    Model: {aiUsage.model} · Requests: {aiUsage.totalRequests}
+                  </p>
                 </div>
-                <span className={`px-2.5 py-1 rounded text-[11px] font-bold ${
-                  aiUsage.configured ? 'bg-[#55C99A]/20 text-[#55C99A]' : 'bg-[#E5B764]/20 text-[#E5B764]'
-                }`}>
+                <span
+                  className={`px-2.5 py-1 rounded text-[11px] font-bold ${
+                    aiUsage.configured
+                      ? 'bg-[var(--fs-success)]/15 text-[var(--fs-success)]'
+                      : 'bg-[var(--fs-warning)]/15 text-[var(--fs-warning)]'
+                  }`}
+                >
                   {aiUsage.configured ? 'API Key Configured' : 'API Key Not Configured'}
                 </span>
               </div>
               {aiUsage.logs.length === 0 ? (
-                <p className="text-xs text-[#718D83]">No AI requests recorded yet.</p>
+                <p className="text-xs text-[var(--fs-text-muted)]">No AI requests recorded yet.</p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
-                    <thead className="text-[#718D83] border-b border-[#28443C]">
+                    <thead className="text-[var(--fs-text-muted)] border-b border-[var(--fs-border)]">
                       <tr>
                         <th className="py-2 px-3">Endpoint</th>
                         <th className="py-2 px-3">Status</th>
@@ -527,19 +589,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                         <th className="py-2 px-3 text-right">Time</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#28443C]/40">
+                    <tbody className="divide-y divide-[var(--fs-border)]">
                       {aiUsage.logs.slice(0, 15).map(log => (
                         <tr key={log.id}>
-                          <td className="py-2 px-3 font-mono text-[#A8E6CE]">{log.endpoint}</td>
+                          <td className="py-2 px-3 font-mono text-[var(--fs-accent)]">
+                            {log.endpoint}
+                          </td>
                           <td className="py-2 px-3">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                              log.status === 'SUCCESS' ? 'bg-[#55C99A]/20 text-[#55C99A]' : 'bg-[#EB7676]/20 text-[#EB7676]'
-                            }`}>
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                log.status === 'SUCCESS'
+                                  ? 'bg-[var(--fs-success)]/15 text-[var(--fs-success)]'
+                                  : 'bg-[var(--fs-danger)]/15 text-[var(--fs-danger)]'
+                              }`}
+                            >
                               {log.status}
                             </span>
                           </td>
-                          <td className="py-2 px-3 text-right tabular-nums text-[#A7C1B8]">{log.latencyMs} ms</td>
-                          <td className="py-2 px-3 text-right text-[#718D83]">
+                          <td className="py-2 px-3 text-right font-mono-num tabular-nums text-[var(--fs-text-body)]">
+                            {log.latencyMs} ms
+                          </td>
+                          <td className="py-2 px-3 text-right text-[var(--fs-text-muted)]">
                             {new Date(log.createdAt).toLocaleTimeString('en-IN')}
                           </td>
                         </tr>

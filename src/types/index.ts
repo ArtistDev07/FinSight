@@ -30,6 +30,7 @@ export interface UserPreferences {
   financialYear: string;
   currency: string;
   language: string;
+  theme?: 'light' | 'dark';
   numberFormat: 'INDIAN' | 'INTERNATIONAL';
   experienceLevel: 'Beginner' | 'Intermediate' | 'Advanced';
   explanationLevel: 'Simple' | 'Balanced' | 'Detailed';
@@ -72,6 +73,13 @@ export interface Transaction {
   source: 'MANUAL' | 'CSV' | 'XLSX' | 'PDF' | 'SMS' | 'STATEMENT';
   notes?: string;
   importJobId?: string;
+  inboxStatus?: 'CATEGORIZED' | 'NEEDS_REVIEW' | 'DUPLICATE' | 'IGNORED';
+  suggestionReason?: string;
+  confidence?: number;
+  isInternalTransfer?: boolean;
+  isCreditCardSettlement?: boolean;
+  isRefund?: boolean;
+  splitItems?: Array<{ category: string; amount: number; notes?: string }>;
   createdAt: string;
 }
 
@@ -429,3 +437,223 @@ export interface AuditLog {
   createdAt: string;
   metadata?: string;
 }
+
+export interface ManualAssetLiability {
+  id: string;
+  ownerId: string;
+  name: string;
+  kind: 'ASSET' | 'LIABILITY';
+  category: string;
+  amount: number;
+  included: boolean;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface MoneyGoal {
+  id: string;
+  ownerId: string;
+  title: string;
+  category:
+    | 'Emergency Fund'
+    | 'Education'
+    | 'Travel'
+    | 'Vehicle'
+    | 'Home'
+    | 'Family'
+    | 'Retirement'
+    | 'Custom Goal';
+  targetAmount: number;
+  currentAmount: number;
+  targetDate: string;
+  monthlyContribution: number;
+  priority: 'HIGH' | 'MEDIUM' | 'LOW';
+  status: 'ACTIVE' | 'COMPLETED' | 'PAUSED';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MoneyCalendarEvent {
+  id: string;
+  ownerId: string;
+  title: string;
+  eventType:
+    | 'SALARY'
+    | 'INCOME'
+    | 'RENT'
+    | 'EMI'
+    | 'CREDIT_CARD'
+    | 'INSURANCE'
+    | 'SUBSCRIPTION'
+    | 'TAX'
+    | 'INVOICE_DUE'
+    | 'SAVINGS'
+    | 'BILL';
+  dueDate: string;
+  amount: number;
+  direction: 'INFLOW' | 'OUTFLOW';
+  relatedResourceId?: string;
+  recurrence: 'ONCE' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY';
+  reminderPreference: 'NONE' | '3_DAYS_BEFORE' | '7_DAYS_BEFORE';
+  status: 'UPCOMING' | 'PAID' | 'OVERDUE';
+  createdAt: string;
+}
+
+export interface CreditCard {
+  id: string;
+  ownerId: string;
+  nickname: string;
+  issuer: string;
+  lastFourDigits: string;
+  creditLimit: number;
+  currentBalance: number;
+  minimumDue: number;
+  statementDate: number;
+  dueDate: number;
+  annualInterestRate?: number;
+  reminderPreference: '3_DAYS_BEFORE' | '7_DAYS_BEFORE' | 'NONE';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreditCardStatement {
+  id: string;
+  ownerId: string;
+  creditCardId: string;
+  statementPeriod: string;
+  totalDue: number;
+  minimumDue: number;
+  dueDate: string;
+  transactions: Array<{ date: string; description: string; amount: number; type: 'DEBIT' | 'CREDIT' }>;
+  fees: number;
+  interestCharges: number;
+  emiComponents: number;
+  uploadedDocumentId?: string;
+  verificationStatus: 'NEEDS_REVIEW' | 'VERIFIED';
+  createdAt: string;
+}
+
+export interface RecurringPayment {
+  id: string;
+  ownerId: string;
+  merchant: string;
+  category: string;
+  estimatedAmount: number;
+  previousAmount?: number;
+  frequency: 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY';
+  lastObservedDate: string;
+  nextEstimatedDate: string;
+  confidence: number;
+  status: 'DETECTED' | 'CONFIRMED' | 'CANCELLED' | 'IGNORED';
+  userConfirmed: boolean;
+  sourceTransactionIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FinancialHealthDimension {
+  key: 'CASH_FLOW' | 'SAVINGS' | 'DEBT' | 'EMERGENCY_FUND' | 'DIVERSIFICATION';
+  label: string;
+  score: number;
+  weight: number;
+  status: 'STRONG' | 'MODERATE' | 'ATTENTION';
+  formulaSummary: string;
+  evidenceText: string;
+}
+
+export interface FinancialHealthSnapshot {
+  id: string;
+  ownerId: string;
+  period: string;
+  totalAssets: number;
+  totalLiabilities: number;
+  estimatedNetWorth: number;
+  monthlyIncome: number;
+  monthlyExpenses: number;
+  monthlySavings: number;
+  savingsRate: number;
+  emergencyFundCoverageMonths: number;
+  compositeIndex: number;
+  formulaDisclosure: string;
+  missingDataNotes: string[];
+  dimensions: FinancialHealthDimension[];
+  observations: Array<{ id: string; title: string; calculation: string; severity: 'info' | 'warning' | 'positive' }>;
+  supportingDataReferences: string[];
+  calculatedAt: string;
+}
+
+export interface BusinessReconciliationRun {
+  id: string;
+  ownerId: string;
+  businessId: string;
+  sourceType: 'BANK_VS_INVOICES' | 'EXPENSES_VS_BANK' | 'FULL_LEDGER';
+  period: string;
+  matchedRecords: Array<{
+    invoiceOrExpenseId: string;
+    transactionId: string;
+    label: string;
+    amount: number;
+    confidence: number;
+    verifiedByUser: boolean;
+  }>;
+  unmatchedRecords: Array<{
+    recordId: string;
+    recordType: 'INVOICE' | 'TRANSACTION' | 'EXPENSE';
+    label: string;
+    amount: number;
+    date: string;
+  }>;
+  exceptions: Array<{
+    id: string;
+    type:
+      | 'POSSIBLE_MISSING_INVOICE'
+      | 'UNMATCHED_PAYMENT'
+      | 'DUPLICATE_INVOICE'
+      | 'GST_MISMATCH'
+      | 'AMOUNT_MISMATCH'
+      | 'OUTSTANDING_PAYMENT';
+    description: string;
+    severity: 'HIGH' | 'MEDIUM' | 'LOW';
+    verifiedByUser: boolean;
+  }>;
+  status: 'PENDING_REVIEW' | 'CONFIRMED';
+  createdAt: string;
+}
+
+export interface PaymentFollowUp {
+  id: string;
+  ownerId: string;
+  invoiceId: string;
+  clientId?: string;
+  clientName: string;
+  invoiceNumber: string;
+  amountDue: number;
+  reminderType: 'FRIENDLY' | 'DUE_SOON' | 'OVERDUE' | 'FINAL';
+  generatedMessage: string;
+  status: 'DRAFT_COPY_ONLY' | 'MARKED_SENT_EXTERNALLY';
+  sentAt?: string;
+  createdAt: string;
+}
+
+export interface InvestmentJournalEntry {
+  id: string;
+  ownerId: string;
+  investmentName: string;
+  reasonForResearch: string;
+  expectedHoldingPeriod: string;
+  risksConsidered: string;
+  userNotes: string;
+  reviewDate: string;
+  createdAt: string;
+}
+
+export interface TaxReadinessItem {
+  id: string;
+  ownerId: string;
+  financialYear: string;
+  title: string;
+  category: 'INCOME' | 'DEDUCTION' | 'REGIME';
+  status: 'NOT_UPLOADED' | 'UPLOADED' | 'NEEDS_REVIEW' | 'VERIFIED_BY_USER';
+  updatedAt: string;
+}
+

@@ -12,9 +12,16 @@ import {
   Sparkles,
   Loader2,
 } from 'lucide-react';
-import { MarketInstrument, MarketCandle, BacktestRecord, PaperTrade, WatchlistItem } from '../../types';
+import {
+  MarketInstrument,
+  MarketCandle,
+  BacktestRecord,
+  PaperTrade,
+  WatchlistItem,
+} from '../../types';
 import { formatINR } from '../../utils/financialMath';
 import { apiFetch, parseApiResponse } from '../../utils/api';
+import { EmptyStateCard } from '../../components/brand/FinSightArtwork';
 
 interface MarketsModuleProps {
   subview: 'overview' | 'watchlist' | 'backtest' | 'paper-trading';
@@ -32,7 +39,10 @@ export const MarketsModule: React.FC<MarketsModuleProps> = ({
   onOpenAI,
 }) => {
   const [instruments, setInstruments] = useState<MarketInstrument[]>([]);
-  const [marketMeta, setMarketMeta] = useState<{ liveProviderConfigured: boolean; archiveCutoffDate: string } | null>(null);
+  const [marketMeta, setMarketMeta] = useState<{
+    liveProviderConfigured: boolean;
+    archiveCutoffDate: string;
+  } | null>(null);
   const [watchlist, setWatchlist] = useState<WatchlistEntry[]>([]);
   const [backtests, setBacktests] = useState<BacktestRecord[]>([]);
   const [paperAccount, setPaperAccount] = useState<{
@@ -54,7 +64,9 @@ export const MarketsModule: React.FC<MarketsModuleProps> = ({
   const [btName, setBtName] = useState('Nifty Moving Average Strategy');
   const [btSymbol, setBtSymbol] = useState('NIFTY 50');
   const [btCapital, setBtCapital] = useState('500000');
-  const [btStrategy, setBtStrategy] = useState<BacktestRecord['strategyType']>('Moving Average Crossover');
+  const [btStrategy, setBtStrategy] = useState<BacktestRecord['strategyType']>(
+    'Moving Average Crossover'
+  );
   const [btStopLoss, setBtStopLoss] = useState('3.5');
   const [btTarget, setBtTarget] = useState('8.0');
   const [isBacktesting, setIsBacktesting] = useState(false);
@@ -100,7 +112,9 @@ export const MarketsModule: React.FC<MarketsModuleProps> = ({
 
   const handleToggleWatchlist = async (symbol: string) => {
     if (isStarred(symbol)) {
-      const res = await apiFetch(`/api/v1/watchlist/${encodeURIComponent(symbol)}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/v1/watchlist/${encodeURIComponent(symbol)}`, {
+        method: 'DELETE',
+      });
       if (res.ok) {
         setWatchlist(prev => prev.filter(w => w.symbol !== symbol));
       }
@@ -233,7 +247,10 @@ export const MarketsModule: React.FC<MarketsModuleProps> = ({
     if (res.ok && json.success && json.data) {
       setPaperAccount(json.data.account);
       setPaperTrades(json.data.trades || []);
-      setTradeStatus({ ok: true, msg: json.message || 'Virtual paper trading account reset to ₹10,00,000.' });
+      setTradeStatus({
+        ok: true,
+        msg: json.message || 'Virtual paper trading account reset to ₹10,00,000.',
+      });
     }
   };
 
@@ -243,18 +260,21 @@ export const MarketsModule: React.FC<MarketsModuleProps> = ({
       : instruments;
 
   return (
-    <div className="p-6 md:p-8 space-y-6 max-w-7xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#28443C] pb-6">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--fs-border)] pb-5">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#F5F7F5] tracking-tight">
-            Trading & Market Insights
+          <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--fs-accent)]">
+            Verified NSE Archive · OHLCV Backtester · Isolated Simulator
+          </p>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-[var(--fs-text)] tracking-tight mt-1">
+            Trading &amp; Market Insights
           </h1>
-          <p className="text-xs text-[#A7C1B8] mt-1">
+          <p className="text-xs text-[var(--fs-text-body)] mt-1">
             Verified historical NSE OHLCV archive, quantitative strategy backtesting, and isolated paper trading.
           </p>
         </div>
 
-        <div className="inline-flex items-center gap-2 rounded-xl bg-[#16352E] border border-[#28443C] px-3.5 py-2 text-xs text-[#55C99A]">
+        <div className="inline-flex items-center gap-2 rounded-xl bg-[var(--fs-surface-secondary)] border border-[var(--fs-border)] px-3.5 py-2 text-xs text-[var(--fs-success)] self-start">
           <ShieldCheck className="h-4 w-4 shrink-0" />
           <span>
             {marketMeta?.liveProviderConfigured
@@ -265,7 +285,7 @@ export const MarketsModule: React.FC<MarketsModuleProps> = ({
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-[#28443C] pb-2 overflow-x-auto whitespace-nowrap">
+      <div className="flex items-center gap-2 border-b border-[var(--fs-border)] pb-2 overflow-x-auto whitespace-nowrap">
         {[
           { label: 'Market Overview', path: '/app/markets', key: 'overview' },
           { label: `Watchlist (${watchlist.length})`, path: '/app/markets/watchlist', key: 'watchlist' },
@@ -275,10 +295,10 @@ export const MarketsModule: React.FC<MarketsModuleProps> = ({
           <button
             key={tab.key}
             onClick={() => onNavigate(tab.path)}
-            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
               subview === tab.key
-                ? 'bg-[#16352E] text-[#A8E6CE] border border-[#28443C]'
-                : 'text-[#A7C1B8] hover:text-[#F5F7F5]'
+                ? 'bg-[var(--fs-surface-secondary)] text-[var(--fs-text)] border border-[var(--fs-border)]'
+                : 'text-[var(--fs-text-body)] hover:text-[var(--fs-text)]'
             }`}
           >
             {tab.label}
@@ -289,88 +309,110 @@ export const MarketsModule: React.FC<MarketsModuleProps> = ({
       {/* SUBVIEW 1: OVERVIEW & WATCHLIST */}
       {(subview === 'overview' || subview === 'watchlist') && (
         <div className="space-y-6">
-          <div className="rounded-2xl border border-[#28443C] bg-[#102722] overflow-x-auto">
-            <div className="p-4 border-b border-[#28443C] flex items-center justify-between">
-              <h3 className="text-sm font-bold text-[#F5F7F5]">
-                {subview === 'watchlist' ? 'Your Tracked Watchlist' : 'NSE Benchmark Indices & Key Instruments'}
+          <div className="fs-card overflow-hidden">
+            <div className="p-4 border-b border-[var(--fs-border)] flex items-center justify-between">
+              <h3 className="text-sm font-bold text-[var(--fs-text)]">
+                {subview === 'watchlist'
+                  ? 'Your Tracked Watchlist'
+                  : 'NSE Benchmark Indices & Key Instruments'}
               </h3>
-              <span className="text-xs text-[#718D83]">VERIFIED_NSE_ARCHIVE</span>
+              <span className="text-xs font-mono text-[var(--fs-text-muted)]">
+                VERIFIED_NSE_ARCHIVE
+              </span>
             </div>
 
             {displayedInstruments.length === 0 ? (
-              <div className="p-8 text-center space-y-3">
-                <p className="text-xs text-[#718D83]">
-                  Your watchlist is empty. Star any NSE instrument in Market Overview to track it here.
-                </p>
-                <button
-                  onClick={() => onNavigate('/app/markets')}
-                  className="rounded-lg bg-[#A8E6CE] px-4 py-2 text-xs font-bold text-[#0B1C19]"
-                >
-                  Browse NSE Instruments
-                </button>
+              <div className="p-4">
+                <EmptyStateCard
+                  variant="watchlist"
+                  title="Your watchlist is empty"
+                  description="Star any NSE index, ETF, or equity benchmark in Market Overview to track its archive range and run simulations."
+                  actionLabel="Browse NSE Instruments"
+                  onAction={() => onNavigate('/app/markets')}
+                />
               </div>
             ) : (
-              <table className="w-full text-left text-xs">
-                <thead className="bg-[#16352E]/40 border-b border-[#28443C] text-[#718D83]">
-                  <tr>
-                    <th className="py-3 px-4 font-medium">Watch</th>
-                    <th className="py-3 px-4 font-medium">Symbol</th>
-                    <th className="py-3 px-4 font-medium">Name</th>
-                    <th className="py-3 px-4 font-medium text-right">Reference Price</th>
-                    <th className="py-3 px-4 font-medium text-right">Day Change</th>
-                    <th className="py-3 px-4 font-medium text-right">52W Range</th>
-                    <th className="py-3 px-4 font-medium text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#28443C]/40">
-                  {displayedInstruments.map(inst => {
-                    const starred = isStarred(inst.symbol);
-                    return (
-                      <tr key={inst.symbol} className="hover:bg-[#16352E]/20 transition-colors">
-                        <td className="py-3 px-4">
-                          <button
-                            onClick={() => handleToggleWatchlist(inst.symbol)}
-                            className={`p-1 rounded hover:bg-[#16352E] ${starred ? 'text-[#E5B764]' : 'text-[#718D83]'}`}
-                            title={starred ? 'Remove from Watchlist' : 'Add to Watchlist'}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[var(--fs-surface-secondary)] border-b border-[var(--fs-border)] text-[var(--fs-text-muted)]">
+                    <tr>
+                      <th className="py-3 px-4 font-medium">Watch</th>
+                      <th className="py-3 px-4 font-medium">Symbol</th>
+                      <th className="py-3 px-4 font-medium">Name</th>
+                      <th className="py-3 px-4 font-medium text-right">Reference Price</th>
+                      <th className="py-3 px-4 font-medium text-right">Day Change</th>
+                      <th className="py-3 px-4 font-medium text-right">52W Range</th>
+                      <th className="py-3 px-4 font-medium text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--fs-border)]">
+                    {displayedInstruments.map(inst => {
+                      const starred = isStarred(inst.symbol);
+                      return (
+                        <tr
+                          key={inst.symbol}
+                          className="hover:bg-[var(--fs-surface-secondary)]/50 transition-colors"
+                        >
+                          <td className="py-3 px-4">
+                            <button
+                              onClick={() => handleToggleWatchlist(inst.symbol)}
+                              aria-label={
+                                starred
+                                  ? `Remove ${inst.symbol} from watchlist`
+                                  : `Add ${inst.symbol} to watchlist`
+                              }
+                              className={`p-1 rounded hover:bg-[var(--fs-surface-secondary)] ${
+                                starred ? 'text-[var(--fs-warning)]' : 'text-[var(--fs-text-muted)]'
+                              }`}
+                            >
+                              <Star className={`h-4 w-4 ${starred ? 'fill-current' : ''}`} />
+                            </button>
+                          </td>
+                          <td className="py-3 px-4 font-bold text-[var(--fs-text)]">{inst.symbol}</td>
+                          <td className="py-3 px-4 text-[var(--fs-text-body)]">{inst.name}</td>
+                          <td className="py-3 px-4 text-right font-semibold font-mono-num tabular-nums text-[var(--fs-text)]">
+                            ₹{inst.currentPrice.toFixed(2)}
+                          </td>
+                          <td
+                            className={`py-3 px-4 text-right font-semibold font-mono-num tabular-nums ${
+                              inst.changePct >= 0
+                                ? 'text-[var(--fs-success)]'
+                                : 'text-[var(--fs-danger)]'
+                            }`}
                           >
-                            <Star className={`h-4 w-4 ${starred ? 'fill-current' : ''}`} />
-                          </button>
-                        </td>
-                        <td className="py-3 px-4 font-bold text-[#F5F7F5]">{inst.symbol}</td>
-                        <td className="py-3 px-4 text-[#A7C1B8]">{inst.name}</td>
-                        <td className="py-3 px-4 text-right font-semibold tabular-nums text-[#F5F7F5]">₹{inst.currentPrice.toFixed(2)}</td>
-                        <td className={`py-3 px-4 text-right font-semibold tabular-nums ${inst.changePct >= 0 ? 'text-[#55C99A]' : 'text-[#EB7676]'}`}>
-                          {inst.changePct >= 0 ? '+' : ''}{inst.changePct.toFixed(2)}%
-                        </td>
-                        <td className="py-3 px-4 text-right text-[#718D83] tabular-nums">
-                          ₹{inst.low52w.toFixed(0)} - ₹{inst.high52w.toFixed(0)}
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              onClick={() => handleOpenHistory(inst.symbol)}
-                              className="rounded-lg bg-[#0B1C19] border border-[#28443C] px-2.5 py-1 text-[11px] text-[#A7C1B8] hover:text-[#A8E6CE] inline-flex items-center gap-1"
-                            >
-                              <BarChart2 className="h-3 w-3" />
-                              <span>OHLCV</span>
-                            </button>
-                            <button
-                              onClick={() => {
-                                setPtSymbol(inst.symbol);
-                                setPtPrice(inst.currentPrice.toString());
-                                onNavigate('/app/markets/paper-trading');
-                              }}
-                              className="rounded-lg bg-[#16352E] border border-[#28443C] px-2.5 py-1 text-[11px] font-semibold text-[#A8E6CE] hover:border-[#72C8B0]"
-                            >
-                              Trade Virtual
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                            {inst.changePct >= 0 ? '+' : ''}
+                            {inst.changePct.toFixed(2)}%
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono-num text-[var(--fs-text-muted)] tabular-nums">
+                            ₹{inst.low52w.toFixed(0)} - ₹{inst.high52w.toFixed(0)}
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => handleOpenHistory(inst.symbol)}
+                                className="fs-btn-secondary px-2.5 py-1 text-[11px] inline-flex items-center gap-1"
+                              >
+                                <BarChart2 className="h-3 w-3" />
+                                <span>OHLCV</span>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setPtSymbol(inst.symbol);
+                                  setPtPrice(inst.currentPrice.toString());
+                                  onNavigate('/app/markets/paper-trading');
+                                }}
+                                className="fs-btn-primary px-2.5 py-1 text-[11px]"
+                              >
+                                Trade Virtual
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </div>
@@ -380,120 +422,152 @@ export const MarketsModule: React.FC<MarketsModuleProps> = ({
       {subview === 'backtest' && (
         <div className="space-y-6 max-w-5xl">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-            <div className="md:col-span-5 rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-4">
-              <h3 className="text-sm font-bold text-[#F5F7F5]">Run OHLCV Historical Backtest</h3>
+            <div className="md:col-span-5 fs-card p-6 space-y-4">
+              <h3 className="text-sm font-bold text-[var(--fs-text)]">
+                Run OHLCV Historical Backtest
+              </h3>
               <form onSubmit={handleRunBacktest} className="space-y-3">
                 <div>
-                  <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Strategy Name</label>
+                  <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">
+                    Strategy Name
+                  </label>
                   <input
                     type="text"
                     value={btName}
                     onChange={e => setBtName(e.target.value)}
-                    className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                    className="fs-input"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Instrument</label>
+                  <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">
+                    Instrument
+                  </label>
                   <select
                     value={btSymbol}
                     onChange={e => setBtSymbol(e.target.value)}
-                    className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                    className="fs-input"
                   >
                     {instruments.map(inst => (
-                      <option key={inst.symbol} value={inst.symbol}>{inst.symbol} — {inst.name}</option>
+                      <option key={inst.symbol} value={inst.symbol}>
+                        {inst.symbol} — {inst.name}
+                      </option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Starting Virtual Capital (₹)</label>
+                  <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">
+                    Starting Virtual Capital (₹)
+                  </label>
                   <input
                     type="number"
                     min="1000"
                     value={btCapital}
                     onChange={e => setBtCapital(e.target.value)}
-                    className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                    className="fs-input font-mono-num"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Strategy Model</label>
+                  <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">
+                    Strategy Model
+                  </label>
                   <select
                     value={btStrategy}
-                    onChange={e => setBtStrategy(e.target.value as BacktestRecord['strategyType'])}
-                    className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                    onChange={e =>
+                      setBtStrategy(e.target.value as BacktestRecord['strategyType'])
+                    }
+                    className="fs-input"
                   >
-                    <option value="Moving Average Crossover">Moving Average Crossover (8 vs 20 SMA)</option>
-                    <option value="RSI-Based Strategy">RSI Oversold Bounce (14-Period RSI)</option>
+                    <option value="Moving Average Crossover">
+                      Moving Average Crossover (8 vs 20 SMA)
+                    </option>
+                    <option value="RSI-Based Strategy">
+                      RSI Oversold Bounce (14-Period RSI)
+                    </option>
                     <option value="Breakout Strategy">15-Day Range Breakout</option>
                   </select>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Stop Loss (%)</label>
+                    <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">
+                      Stop Loss (%)
+                    </label>
                     <input
                       type="number"
                       step="0.1"
                       min="0.25"
                       value={btStopLoss}
                       onChange={e => setBtStopLoss(e.target.value)}
-                      className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                      className="fs-input font-mono-num"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Target (%)</label>
+                    <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">
+                      Target (%)
+                    </label>
                     <input
                       type="number"
                       step="0.1"
                       min="0.5"
                       value={btTarget}
                       onChange={e => setBtTarget(e.target.value)}
-                      className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                      className="fs-input font-mono-num"
                       required
                     />
                   </div>
                 </div>
                 {backtestError && (
-                  <div className="p-2.5 rounded-lg bg-[#EB7676]/10 border border-[#EB7676]/40 text-xs text-[#EB7676]">
+                  <div className="p-2.5 rounded-lg bg-[var(--fs-danger)]/10 border border-[var(--fs-danger)]/30 text-xs text-[var(--fs-danger)]">
                     {backtestError}
                   </div>
                 )}
                 <button
                   type="submit"
                   disabled={isBacktesting}
-                  className="w-full rounded-xl bg-[#A8E6CE] py-2.5 text-xs font-bold text-[#0B1C19] hover:bg-[#72C8B0] flex items-center justify-center gap-2"
+                  className="fs-btn-primary w-full py-2.5 text-xs flex items-center justify-center gap-2"
                 >
                   <Play className="h-3.5 w-3.5 fill-current" />
-                  <span>{isBacktesting ? 'Executing Candle Simulation...' : 'Run Historical Backtest'}</span>
+                  <span>
+                    {isBacktesting ? 'Executing Candle Simulation...' : 'Run Historical Backtest'}
+                  </span>
                 </button>
               </form>
             </div>
 
             <div className="md:col-span-7 space-y-4">
-              <h3 className="text-sm font-bold text-[#F5F7F5]">Simulated Backtest Runs</h3>
+              <h3 className="text-sm font-bold text-[var(--fs-text)]">Simulated Backtest Runs</h3>
               {backtests.length === 0 ? (
-                <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-8 text-center text-xs text-[#718D83]">
+                <div className="fs-card p-8 text-center text-xs text-[var(--fs-text-muted)]">
                   No backtests executed yet. Configure a strategy on the left to evaluate it across 140 historical NSE trading sessions.
                 </div>
               ) : (
                 backtests.map(bt => (
-                  <div key={bt.id} className="rounded-2xl border border-[#28443C] bg-[#102722] p-5 space-y-4">
-                    <div className="flex items-center justify-between border-b border-[#28443C] pb-3">
+                  <div key={bt.id} className="fs-card p-5 space-y-4">
+                    <div className="flex items-center justify-between border-b border-[var(--fs-border)] pb-3">
                       <div>
-                        <h4 className="text-sm font-bold text-[#F5F7F5]">{bt.strategyName}</h4>
-                        <div className="text-[11px] text-[#718D83]">
-                          {bt.symbol} · {bt.startDate} to {bt.endDate} · {bt.tradeCount} trade{bt.tradeCount === 1 ? '' : 's'}
+                        <h4 className="text-sm font-bold text-[var(--fs-text)]">{bt.strategyName}</h4>
+                        <div className="text-[11px] text-[var(--fs-text-muted)]">
+                          {bt.symbol} · {bt.startDate} to {bt.endDate} · {bt.tradeCount} trade
+                          {bt.tradeCount === 1 ? '' : 's'}
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className={`text-xs font-bold tabular-nums ${bt.totalReturnPct >= 0 ? 'text-[#55C99A]' : 'text-[#EB7676]'}`}>
-                          {bt.totalReturnPct >= 0 ? '+' : ''}{bt.totalReturnPct}% Return
+                        <span
+                          className={`text-xs font-bold font-mono-num tabular-nums ${
+                            bt.totalReturnPct >= 0
+                              ? 'text-[var(--fs-success)]'
+                              : 'text-[var(--fs-danger)]'
+                          }`}
+                        >
+                          {bt.totalReturnPct >= 0 ? '+' : ''}
+                          {bt.totalReturnPct}% Return
                         </span>
                         <button
                           onClick={() => handleDeleteBacktest(bt.id)}
-                          className="text-[#718D83] hover:text-[#EB7676]"
-                          title="Delete Backtest"
+                          aria-label={`Delete backtest ${bt.strategyName}`}
+                          className="text-[var(--fs-text-muted)] hover:text-[var(--fs-danger)]"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -501,23 +575,35 @@ export const MarketsModule: React.FC<MarketsModuleProps> = ({
                     </div>
 
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
-                      <div className="p-2 rounded-xl bg-[#0B1C19] border border-[#28443C]">
-                        <div className="text-[10px] text-[#718D83]">Initial Capital</div>
-                        <div className="font-bold text-[#F5F7F5] tabular-nums mt-0.5">{formatINR(bt.startingCapital)}</div>
+                      <div className="p-2.5 rounded-xl bg-[var(--fs-surface-secondary)] border border-[var(--fs-border)]">
+                        <div className="text-[10px] text-[var(--fs-text-muted)]">Initial Capital</div>
+                        <div className="font-bold font-mono-num text-[var(--fs-text)] tabular-nums mt-0.5">
+                          {formatINR(bt.startingCapital)}
+                        </div>
                       </div>
-                      <div className="p-2 rounded-xl bg-[#0B1C19] border border-[#28443C]">
-                        <div className="text-[10px] text-[#718D83]">Final Capital</div>
-                        <div className={`font-bold tabular-nums mt-0.5 ${bt.finalCapital >= bt.startingCapital ? 'text-[#55C99A]' : 'text-[#EB7676]'}`}>
+                      <div className="p-2.5 rounded-xl bg-[var(--fs-surface-secondary)] border border-[var(--fs-border)]">
+                        <div className="text-[10px] text-[var(--fs-text-muted)]">Final Capital</div>
+                        <div
+                          className={`font-bold font-mono-num tabular-nums mt-0.5 ${
+                            bt.finalCapital >= bt.startingCapital
+                              ? 'text-[var(--fs-success)]'
+                              : 'text-[var(--fs-danger)]'
+                          }`}
+                        >
                           {formatINR(bt.finalCapital)}
                         </div>
                       </div>
-                      <div className="p-2 rounded-xl bg-[#0B1C19] border border-[#28443C]">
-                        <div className="text-[10px] text-[#718D83]">Win Rate</div>
-                        <div className="font-bold text-[#A8E6CE] tabular-nums mt-0.5">{bt.winRatePct}%</div>
+                      <div className="p-2.5 rounded-xl bg-[var(--fs-surface-secondary)] border border-[var(--fs-border)]">
+                        <div className="text-[10px] text-[var(--fs-text-muted)]">Win Rate</div>
+                        <div className="font-bold font-mono-num text-[var(--fs-accent)] tabular-nums mt-0.5">
+                          {bt.winRatePct}%
+                        </div>
                       </div>
-                      <div className="p-2 rounded-xl bg-[#0B1C19] border border-[#28443C]">
-                        <div className="text-[10px] text-[#718D83]">Max Drawdown</div>
-                        <div className="font-bold text-[#EB7676] tabular-nums mt-0.5">{bt.maximumDrawdownPct}%</div>
+                      <div className="p-2.5 rounded-xl bg-[var(--fs-surface-secondary)] border border-[var(--fs-border)]">
+                        <div className="text-[10px] text-[var(--fs-text-muted)]">Max Drawdown</div>
+                        <div className="font-bold font-mono-num text-[var(--fs-danger)] tabular-nums mt-0.5">
+                          {bt.maximumDrawdownPct}%
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -531,64 +617,83 @@ export const MarketsModule: React.FC<MarketsModuleProps> = ({
       {/* SUBVIEW 3: PAPER TRADING SIMULATOR */}
       {subview === 'paper-trading' && (
         <div className="space-y-6 max-w-5xl">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-[#A7C1B8]">Isolated virtual capital ledger for risk-free strategy practice.</span>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <span className="text-xs text-[var(--fs-text-body)]">
+              Isolated virtual capital ledger for risk-free strategy practice.
+            </span>
             <button
               onClick={handleResetPaperAccount}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[#28443C] bg-[#102722] px-3 py-1.5 text-xs font-semibold text-[#A8E6CE] hover:border-[#72C8B0]"
+              className="fs-btn-secondary inline-flex items-center gap-1.5 px-3 py-1.5 text-xs self-start"
             >
-              <RotateCcw className="h-3.5 w-3.5" />
+              <RotateCcw className="h-3.5 w-3.5 text-[var(--fs-accent)]" />
               <span>Reset Virtual Account (₹10L)</span>
             </button>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-5 space-y-1">
-              <span className="text-xs text-[#718D83]">Available Virtual Cash</span>
-              <div className="text-2xl font-bold text-[#55C99A] tabular-nums">
+            <div className="fs-card p-5 space-y-1">
+              <span className="text-xs text-[var(--fs-text-muted)]">Available Virtual Cash</span>
+              <div className="text-2xl font-bold font-mono-num text-[var(--fs-success)] tabular-nums">
                 {formatINR(paperAccount.availableVirtualBalance)}
               </div>
-              <span className="text-[11px] text-[#718D83]">Simulated ₹10L initial allotment</span>
+              <span className="text-[11px] text-[var(--fs-text-muted)]">
+                Simulated ₹10L initial allotment
+              </span>
             </div>
-            <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-5 space-y-1">
-              <span className="text-xs text-[#718D83]">Simulated Portfolio Value</span>
-              <div className="text-2xl font-bold text-[#A8E6CE] tabular-nums">
+            <div className="fs-card p-5 space-y-1">
+              <span className="text-xs text-[var(--fs-text-muted)]">Simulated Portfolio Value</span>
+              <div className="text-2xl font-bold font-mono-num text-[var(--fs-accent)] tabular-nums">
                 {formatINR(paperAccount.simulatedPortfolioValue)}
               </div>
-              <span className="text-[11px] text-[#718D83]">
+              <span className="text-[11px] text-[var(--fs-text-muted)]">
                 {Object.keys(paperAccount.positions || {}).length} open virtual position(s)
               </span>
             </div>
-            <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-5 space-y-1">
-              <span className="text-xs text-[#718D83]">Total Virtual Net Worth</span>
-              <div className="text-2xl font-bold text-[#F5F7F5] tabular-nums">
-                {formatINR(paperAccount.availableVirtualBalance + paperAccount.simulatedPortfolioValue)}
+            <div className="fs-card p-5 space-y-1">
+              <span className="text-xs text-[var(--fs-text-muted)]">Total Virtual Net Worth</span>
+              <div className="text-2xl font-bold font-mono-num text-[var(--fs-text)] tabular-nums">
+                {formatINR(
+                  paperAccount.availableVirtualBalance + paperAccount.simulatedPortfolioValue
+                )}
               </div>
-              <span className="text-[11px] text-[#55C99A]">Zero real money exposure</span>
+              <span className="text-[11px] text-[var(--fs-success)]">Zero real money exposure</span>
             </div>
           </div>
 
           {tradeStatus && (
-            <div className={`p-3.5 rounded-xl border text-xs flex items-center gap-2 ${
-              tradeStatus.ok
-                ? 'bg-[#55C99A]/10 border-[#55C99A]/40 text-[#55C99A]'
-                : 'bg-[#EB7676]/10 border-[#EB7676]/40 text-[#EB7676]'
-            }`}>
-              {tradeStatus.ok ? <CheckCircle className="h-4 w-4 shrink-0" /> : <AlertCircle className="h-4 w-4 shrink-0" />}
+            <div
+              className={`p-3.5 rounded-xl border text-xs flex items-center gap-2 ${
+                tradeStatus.ok
+                  ? 'bg-[var(--fs-success)]/10 border-[var(--fs-success)]/30 text-[var(--fs-success)]'
+                  : 'bg-[var(--fs-danger)]/10 border-[var(--fs-danger)]/30 text-[var(--fs-danger)]'
+              }`}
+            >
+              {tradeStatus.ok ? (
+                <CheckCircle className="h-4 w-4 shrink-0" />
+              ) : (
+                <AlertCircle className="h-4 w-4 shrink-0" />
+              )}
               <span>{tradeStatus.msg}</span>
             </div>
           )}
 
           {/* Open Virtual Positions */}
           {paperAccount.positions && Object.keys(paperAccount.positions).length > 0 && (
-            <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-4 space-y-2">
-              <h3 className="text-xs font-bold text-[#F5F7F5] uppercase tracking-wider">Open Simulated Positions</h3>
+            <div className="fs-card p-4 space-y-2">
+              <h3 className="text-xs font-bold text-[var(--fs-text)] uppercase tracking-wider">
+                Open Simulated Positions
+              </h3>
               <div className="flex flex-wrap gap-2">
                 {Object.entries(paperAccount.positions).map(([sym, pos]) => (
-                  <div key={sym} className="rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs">
-                    <span className="font-bold text-[#F5F7F5]">{sym}</span>{' '}
-                    <span className="text-[#A8E6CE] tabular-nums">{pos.quantity} units</span>{' '}
-                    <span className="text-[#718D83]">@ avg ₹{pos.avgPrice.toFixed(2)}</span>
+                  <div
+                    key={sym}
+                    className="rounded-xl bg-[var(--fs-surface-secondary)] border border-[var(--fs-border)] px-3 py-2 text-xs"
+                  >
+                    <span className="font-bold text-[var(--fs-text)]">{sym}</span>{' '}
+                    <span className="text-[var(--fs-accent)] font-mono-num tabular-nums">
+                      {pos.quantity} units
+                    </span>{' '}
+                    <span className="text-[var(--fs-text-muted)]">@ avg ₹{pos.avgPrice.toFixed(2)}</span>
                   </div>
                 ))}
               </div>
@@ -596,11 +701,13 @@ export const MarketsModule: React.FC<MarketsModuleProps> = ({
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-            <div className="md:col-span-5 rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-4">
-              <h3 className="text-sm font-bold text-[#F5F7F5]">Simulate Market Order</h3>
+            <div className="md:col-span-5 fs-card p-6 space-y-4">
+              <h3 className="text-sm font-bold text-[var(--fs-text)]">Simulate Market Order</h3>
               <form onSubmit={handleSimulateTrade} className="space-y-3">
                 <div>
-                  <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Instrument</label>
+                  <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">
+                    Instrument
+                  </label>
                   <select
                     value={ptSymbol}
                     onChange={e => {
@@ -608,62 +715,72 @@ export const MarketsModule: React.FC<MarketsModuleProps> = ({
                       const inst = instruments.find(i => i.symbol === e.target.value);
                       if (inst) setPtPrice(inst.currentPrice.toString());
                     }}
-                    className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                    className="fs-input"
                   >
                     {instruments.map(inst => (
-                      <option key={inst.symbol} value={inst.symbol}>{inst.symbol} (₹{inst.currentPrice})</option>
+                      <option key={inst.symbol} value={inst.symbol}>
+                        {inst.symbol} (₹{inst.currentPrice})
+                      </option>
                     ))}
                   </select>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Action</label>
+                    <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">
+                      Action
+                    </label>
                     <select
                       value={ptAction}
                       onChange={e => setPtAction(e.target.value as 'BUY' | 'SELL')}
-                      className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                      className="fs-input"
                     >
                       <option value="BUY">BUY</option>
                       <option value="SELL">SELL</option>
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Quantity</label>
+                    <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">
+                      Quantity
+                    </label>
                     <input
                       type="number"
                       step="1"
                       min="1"
                       value={ptQuantity}
                       onChange={e => setPtQuantity(e.target.value)}
-                      className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                      className="fs-input font-mono-num"
                       required
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Execution Price (₹)</label>
+                  <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">
+                    Execution Price (₹)
+                  </label>
                   <input
                     type="number"
                     step="0.05"
                     min="0.05"
                     value={ptPrice}
                     onChange={e => setPtPrice(e.target.value)}
-                    className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                    className="fs-input font-mono-num"
                     required
                   />
                 </div>
-                <div className="p-3 rounded-xl bg-[#0B1C19] border border-[#28443C] text-xs space-y-1">
-                  <div className="flex justify-between text-[#718D83]">
+                <div className="p-3 rounded-xl bg-[var(--fs-surface-secondary)] border border-[var(--fs-border)] text-xs space-y-1">
+                  <div className="flex justify-between text-[var(--fs-text-muted)]">
                     <span>Simulated Value:</span>
-                    <span className="font-bold text-[#F5F7F5] tabular-nums">
+                    <span className="font-bold font-mono-num text-[var(--fs-text)] tabular-nums">
                       {formatINR((parseFloat(ptQuantity) || 0) * (parseFloat(ptPrice) || 0))}
                     </span>
                   </div>
                 </div>
                 <button
                   type="submit"
-                  className={`w-full rounded-xl py-2.5 text-xs font-bold text-[#0B1C19] ${
-                    ptAction === 'BUY' ? 'bg-[#55C99A] hover:bg-[#48b588]' : 'bg-[#EB7676] hover:bg-[#d66565]'
+                  className={`w-full rounded-xl py-2.5 text-xs font-bold text-white ${
+                    ptAction === 'BUY'
+                      ? 'bg-[var(--fs-success)] hover:opacity-90'
+                      : 'bg-[var(--fs-danger)] hover:opacity-90'
                   }`}
                 >
                   Submit Virtual {ptAction} Order
@@ -671,17 +788,17 @@ export const MarketsModule: React.FC<MarketsModuleProps> = ({
               </form>
             </div>
 
-            <div className="md:col-span-7 rounded-2xl border border-[#28443C] bg-[#102722] overflow-x-auto">
-              <div className="p-4 border-b border-[#28443C]">
-                <h3 className="text-sm font-bold text-[#F5F7F5]">Simulated Trade History</h3>
+            <div className="md:col-span-7 fs-card overflow-x-auto">
+              <div className="p-4 border-b border-[var(--fs-border)]">
+                <h3 className="text-sm font-bold text-[var(--fs-text)]">Simulated Trade History</h3>
               </div>
               {paperTrades.length === 0 ? (
-                <div className="p-8 text-center text-xs text-[#718D83]">
+                <div className="p-8 text-center text-xs text-[var(--fs-text-muted)]">
                   No simulated orders executed yet. Place a BUY order on the left to start practicing.
                 </div>
               ) : (
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-[#16352E]/40 border-b border-[#28443C] text-[#718D83]">
+                  <thead className="bg-[var(--fs-surface-secondary)] border-b border-[var(--fs-border)] text-[var(--fs-text-muted)]">
                     <tr>
                       <th className="py-2.5 px-3">Date</th>
                       <th className="py-2.5 px-3">Symbol</th>
@@ -691,17 +808,33 @@ export const MarketsModule: React.FC<MarketsModuleProps> = ({
                       <th className="py-2.5 px-3 text-right">Cash Impact</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#28443C]/40">
+                  <tbody className="divide-y divide-[var(--fs-border)]">
                     {paperTrades.map(tr => (
                       <tr key={tr.id}>
-                        <td className="py-2.5 px-3 text-[#718D83]">{tr.historicalReferenceDate}</td>
-                        <td className="py-2.5 px-3 font-bold text-[#F5F7F5]">{tr.symbol}</td>
-                        <td className={`py-2.5 px-3 font-semibold ${tr.action === 'BUY' ? 'text-[#55C99A]' : 'text-[#EB7676]'}`}>
+                        <td className="py-2.5 px-3 text-[var(--fs-text-muted)]">
+                          {tr.historicalReferenceDate}
+                        </td>
+                        <td className="py-2.5 px-3 font-bold text-[var(--fs-text)]">{tr.symbol}</td>
+                        <td
+                          className={`py-2.5 px-3 font-semibold ${
+                            tr.action === 'BUY'
+                              ? 'text-[var(--fs-success)]'
+                              : 'text-[var(--fs-danger)]'
+                          }`}
+                        >
                           {tr.action}
                         </td>
-                        <td className="py-2.5 px-3 text-right tabular-nums text-[#F5F7F5]">{tr.quantity}</td>
-                        <td className="py-2.5 px-3 text-right tabular-nums text-[#F5F7F5]">₹{tr.simulatedPrice.toFixed(2)}</td>
-                        <td className={`py-2.5 px-3 text-right font-semibold tabular-nums ${tr.cashImpact >= 0 ? 'text-[#55C99A]' : 'text-[#F5F7F5]'}`}>
+                        <td className="py-2.5 px-3 text-right font-mono-num tabular-nums text-[var(--fs-text)]">
+                          {tr.quantity}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono-num tabular-nums text-[var(--fs-text)]">
+                          ₹{tr.simulatedPrice.toFixed(2)}
+                        </td>
+                        <td
+                          className={`py-2.5 px-3 text-right font-semibold font-mono-num tabular-nums ${
+                            tr.cashImpact >= 0 ? 'text-[var(--fs-success)]' : 'text-[var(--fs-text)]'
+                          }`}
+                        >
                           {formatINR(tr.cashImpact)}
                         </td>
                       </tr>
@@ -716,23 +849,30 @@ export const MarketsModule: React.FC<MarketsModuleProps> = ({
 
       {/* Historical OHLCV Drawer Modal */}
       {historySymbol && (
-        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
-          <div className="w-full max-w-3xl rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-[#28443C] pb-3">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-3xl fs-card p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-[var(--fs-border)] pb-3">
               <div>
-                <h3 className="text-base font-bold text-[#F5F7F5]">{historySymbol} · Historical OHLCV Archive</h3>
-                <p className="text-[11px] text-[#718D83]">Source: VERIFIED_NSE_ARCHIVE (Last 60 Trading Sessions)</p>
+                <h3 className="text-base font-bold text-[var(--fs-text)]">
+                  {historySymbol} · Historical OHLCV Archive
+                </h3>
+                <p className="text-[11px] text-[var(--fs-text-muted)]">
+                  Source: VERIFIED_NSE_ARCHIVE (Last 60 Trading Sessions)
+                </p>
               </div>
               <button
                 onClick={() => setHistorySymbol(null)}
-                className="p-1.5 rounded-lg text-[#718D83] hover:text-[#F5F7F5]"
+                aria-label="Close OHLCV history modal"
+                className="p-1.5 rounded-lg text-[var(--fs-text-muted)] hover:text-[var(--fs-text)]"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             {historyLoading ? (
-              <div className="py-10 text-center text-xs text-[#A7C1B8]">Loading historical OHLCV candles...</div>
+              <div className="py-10 text-center text-xs text-[var(--fs-text-body)]">
+                Loading historical OHLCV candles...
+              </div>
             ) : (
               <>
                 {historyCandles.length > 0 && (() => {
@@ -741,10 +881,14 @@ export const MarketsModule: React.FC<MarketsModuleProps> = ({
                   const maxC = Math.max(...closes);
                   const span = Math.max(maxC - minC, 1);
                   return (
-                    <div className="p-4 rounded-xl bg-[#0B1C19] border border-[#28443C] space-y-2">
-                      <div className="flex justify-between text-[11px] text-[#718D83]">
-                        <span>Close Price Range: ₹{minC.toFixed(2)} – ₹{maxC.toFixed(2)}</span>
-                        <span>{historyCandles[0].date} → {historyCandles[historyCandles.length - 1].date}</span>
+                    <div className="p-4 rounded-xl bg-[var(--fs-surface-secondary)] border border-[var(--fs-border)] space-y-2">
+                      <div className="flex justify-between text-[11px] text-[var(--fs-text-muted)]">
+                        <span>
+                          Close Price Range: ₹{minC.toFixed(2)} – ₹{maxC.toFixed(2)}
+                        </span>
+                        <span>
+                          {historyCandles[0].date} → {historyCandles[historyCandles.length - 1].date}
+                        </span>
                       </div>
                       <div className="h-24 flex items-end gap-0.5 pt-2">
                         {historyCandles.map(c => {
@@ -754,7 +898,9 @@ export const MarketsModule: React.FC<MarketsModuleProps> = ({
                             <div
                               key={c.date}
                               title={`${c.date}: Close ₹${c.close}`}
-                              className={`flex-1 rounded-t ${isUp ? 'bg-[#55C99A]' : 'bg-[#EB7676]'}`}
+                              className={`flex-1 rounded-t ${
+                                isUp ? 'bg-[var(--fs-success)]' : 'bg-[var(--fs-danger)]'
+                              }`}
                               style={{ height: `${hPct}%` }}
                             />
                           );
@@ -764,9 +910,9 @@ export const MarketsModule: React.FC<MarketsModuleProps> = ({
                   );
                 })()}
 
-                <div className="max-h-56 overflow-y-auto rounded-xl border border-[#28443C]">
+                <div className="max-h-56 overflow-y-auto rounded-xl border border-[var(--fs-border)]">
                   <table className="w-full text-left text-xs">
-                    <thead className="bg-[#16352E]/50 text-[#718D83] sticky top-0">
+                    <thead className="bg-[var(--fs-surface-secondary)] text-[var(--fs-text-muted)] sticky top-0">
                       <tr>
                         <th className="py-2 px-3">Date</th>
                         <th className="py-2 px-3 text-right">Open</th>
@@ -775,16 +921,27 @@ export const MarketsModule: React.FC<MarketsModuleProps> = ({
                         <th className="py-2 px-3 text-right">Close</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#28443C]/40">
-                      {historyCandles.slice(-15).reverse().map(c => (
-                        <tr key={c.date}>
-                          <td className="py-1.5 px-3 text-[#718D83]">{c.date}</td>
-                          <td className="py-1.5 px-3 text-right tabular-nums text-[#A7C1B8]">₹{c.open.toFixed(2)}</td>
-                          <td className="py-1.5 px-3 text-right tabular-nums text-[#55C99A]">₹{c.high.toFixed(2)}</td>
-                          <td className="py-1.5 px-3 text-right tabular-nums text-[#EB7676]">₹{c.low.toFixed(2)}</td>
-                          <td className="py-1.5 px-3 text-right font-semibold tabular-nums text-[#F5F7F5]">₹{c.close.toFixed(2)}</td>
-                        </tr>
-                      ))}
+                    <tbody className="divide-y divide-[var(--fs-border)]">
+                      {historyCandles
+                        .slice(-15)
+                        .reverse()
+                        .map(c => (
+                          <tr key={c.date}>
+                            <td className="py-1.5 px-3 text-[var(--fs-text-muted)]">{c.date}</td>
+                            <td className="py-1.5 px-3 text-right font-mono-num tabular-nums text-[var(--fs-text-body)]">
+                              ₹{c.open.toFixed(2)}
+                            </td>
+                            <td className="py-1.5 px-3 text-right font-mono-num tabular-nums text-[var(--fs-success)]">
+                              ₹{c.high.toFixed(2)}
+                            </td>
+                            <td className="py-1.5 px-3 text-right font-mono-num tabular-nums text-[var(--fs-danger)]">
+                              ₹{c.low.toFixed(2)}
+                            </td>
+                            <td className="py-1.5 px-3 text-right font-semibold font-mono-num tabular-nums text-[var(--fs-text)]">
+                              ₹{c.close.toFixed(2)}
+                            </td>
+                          </tr>
+                        ))}
                     </tbody>
                   </table>
                 </div>
@@ -792,13 +949,13 @@ export const MarketsModule: React.FC<MarketsModuleProps> = ({
             )}
 
             {historyAiInsight && (
-              <div className="p-3.5 rounded-xl bg-[#16352E]/60 border border-[#A8E6CE]/40 text-xs text-[#F5F7F5] whitespace-pre-wrap leading-relaxed">
+              <div className="p-3.5 rounded-xl bg-[var(--fs-surface-secondary)] border border-[var(--fs-accent)]/40 text-xs text-[var(--fs-text)] whitespace-pre-wrap leading-relaxed">
                 {historyAiInsight}
               </div>
             )}
 
             {historyAiError && (
-              <div className="p-3 rounded-xl bg-[#EB7676]/10 border border-[#EB7676]/40 text-xs text-[#EB7676]">
+              <div className="p-3 rounded-xl bg-[var(--fs-danger)]/10 border border-[var(--fs-danger)]/30 text-xs text-[var(--fs-danger)]">
                 {historyAiError}
               </div>
             )}
@@ -807,14 +964,20 @@ export const MarketsModule: React.FC<MarketsModuleProps> = ({
               <button
                 onClick={handleExplainSymbolWithAi}
                 disabled={historyAiLoading}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-[#16352E] border border-[#28443C] px-4 py-2 text-xs font-semibold text-[#A8E6CE] hover:border-[#72C8B0]"
+                className="fs-btn-secondary inline-flex items-center gap-1.5 px-4 py-2 text-xs"
               >
-                {historyAiLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                <span>{historyAiLoading ? 'Analyzing...' : `Explain ${historySymbol} with Gemini AI`}</span>
+                {historyAiLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--fs-accent)]" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5 text-[var(--fs-accent)]" />
+                )}
+                <span>
+                  {historyAiLoading ? 'Analyzing...' : `Explain ${historySymbol} with Gemini AI`}
+                </span>
               </button>
               <button
                 onClick={onOpenAI}
-                className="text-xs font-semibold text-[#A8E6CE] hover:underline"
+                className="text-xs font-semibold text-[var(--fs-accent)] hover:underline"
               >
                 Open Full AI Drawer →
               </button>

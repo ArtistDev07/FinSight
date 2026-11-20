@@ -252,6 +252,106 @@
         "read": { "type": "boolean" }
       },
       "required": ["id", "ownerId", "title", "read"]
+    },
+    "MoneyGoal": {
+      "title": "MoneyGoal",
+      "description": "User-owned financial savings goal or emergency fund",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "targetAmount": { "type": "number" },
+        "currentAmount": { "type": "number" }
+      },
+      "required": ["id", "ownerId", "title", "targetAmount"]
+    },
+    "MoneyCalendarEvent": {
+      "title": "MoneyCalendarEvent",
+      "description": "Upcoming income, bill, EMI, or payment obligation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "title": { "type": "string" },
+        "dueDate": { "type": "string" },
+        "amount": { "type": "number" }
+      },
+      "required": ["id", "ownerId", "title", "dueDate", "amount"]
+    },
+    "CreditCard": {
+      "title": "CreditCard",
+      "description": "Credit card metadata (nickname, issuer, last 4 digits only, never CVV/full PAN)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "nickname": { "type": "string" },
+        "lastFourDigits": { "type": "string", "maxLength": 4 },
+        "creditLimit": { "type": "number" },
+        "currentBalance": { "type": "number" }
+      },
+      "required": ["id", "ownerId", "nickname", "lastFourDigits", "creditLimit"]
+    },
+    "CreditCardStatement": {
+      "title": "CreditCardStatement",
+      "description": "Parsed credit card statement due summary",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "creditCardId": { "type": "string" },
+        "totalDue": { "type": "number" }
+      },
+      "required": ["id", "ownerId", "creditCardId", "totalDue"]
+    },
+    "RecurringPayment": {
+      "title": "RecurringPayment",
+      "description": "Detected or user-confirmed recurring payment or subscription",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "merchant": { "type": "string" },
+        "estimatedAmount": { "type": "number" },
+        "frequency": { "type": "string" }
+      },
+      "required": ["id", "ownerId", "merchant", "estimatedAmount"]
+    },
+    "FinancialHealthSnapshot": {
+      "title": "FinancialHealthSnapshot",
+      "description": "Periodic deterministic financial health summary",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "period": { "type": "string" },
+        "estimatedNetWorth": { "type": "number" }
+      },
+      "required": ["id", "ownerId", "period", "estimatedNetWorth"]
+    },
+    "BusinessReconciliationRun": {
+      "title": "BusinessReconciliationRun",
+      "description": "Deterministic ledger matching run for business invoices and transactions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "ownerId", "status"]
+    },
+    "PaymentFollowUp": {
+      "title": "PaymentFollowUp",
+      "description": "Generated client invoice follow-up reminder",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "invoiceId": { "type": "string" }
+      },
+      "required": ["id", "ownerId", "invoiceId"]
     }
   },
   "firestore": {
@@ -334,6 +434,38 @@
     "/notifications/{docId}": {
       "schema": { "$ref": "#/entities/AppNotification" },
       "description": "User alerts scoped by ownerId"
+    },
+    "/moneyGoals/{docId}": {
+      "schema": { "$ref": "#/entities/MoneyGoal" },
+      "description": "Financial savings goals scoped by ownerId"
+    },
+    "/moneyCalendarEvents/{docId}": {
+      "schema": { "$ref": "#/entities/MoneyCalendarEvent" },
+      "description": "Upcoming bills and financial obligations scoped by ownerId"
+    },
+    "/creditCards/{docId}": {
+      "schema": { "$ref": "#/entities/CreditCard" },
+      "description": "Credit card tracking metadata scoped by ownerId"
+    },
+    "/creditCardStatements/{docId}": {
+      "schema": { "$ref": "#/entities/CreditCardStatement" },
+      "description": "Credit card statements scoped by ownerId"
+    },
+    "/recurringPayments/{docId}": {
+      "schema": { "$ref": "#/entities/RecurringPayment" },
+      "description": "Detected and confirmed recurring subscriptions scoped by ownerId"
+    },
+    "/financialHealthSnapshots/{docId}": {
+      "schema": { "$ref": "#/entities/FinancialHealthSnapshot" },
+      "description": "Financial health snapshots scoped by ownerId"
+    },
+    "/businessReconciliationRuns/{docId}": {
+      "schema": { "$ref": "#/entities/BusinessReconciliationRun" },
+      "description": "Business reconciliation audit runs scoped by ownerId"
+    },
+    "/paymentFollowUps/{docId}": {
+      "schema": { "$ref": "#/entities/PaymentFollowUp" },
+      "description": "Business invoice follow-up reminders scoped by ownerId"
     }
   }
 }

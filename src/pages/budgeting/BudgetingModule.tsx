@@ -9,10 +9,18 @@ import {
   CheckCircle,
   Sparkles,
   Loader2,
+  Inbox,
+  Split,
+  ArrowLeftRight,
+  CreditCard,
+  RotateCcw,
+  EyeOff,
 } from 'lucide-react';
 import { Transaction, Budget, ImportJobRecord } from '../../types';
 import { calculateBudgetMetrics, formatINR } from '../../utils/financialMath';
+import { isDoubleCountExcluded } from '../../utils/financialIntelligence';
 import { apiFetch, parseApiResponse } from '../../utils/api';
+import { EmptyStateCard } from '../../components/brand/FinSightArtwork';
 
 interface BudgetingModuleProps {
   subview: 'overview' | 'transactions' | 'import' | 'budgets' | 'insights';
@@ -33,6 +41,24 @@ interface StagedImportRow {
   isDuplicate?: boolean;
 }
 
+const CATEGORIES = [
+  'Food & Dining',
+  'Food',
+  'Housing & Utilities',
+  'Housing',
+  'Transport',
+  'Shopping',
+  'Subscriptions',
+  'Utilities',
+  'Investments',
+  'Salary',
+  'Consulting',
+  'Transfer',
+  'Credit Card Payment',
+  'Refund',
+  'General Expense',
+];
+
 export const BudgetingModule: React.FC<BudgetingModuleProps> = ({
   subview,
   onNavigate,
@@ -44,6 +70,7 @@ export const BudgetingModule: React.FC<BudgetingModuleProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [moduleError, setModuleError] = useState<string | null>(null);
+  const [inboxFeedback, setInboxFeedback] = useState<string | null>(null);
 
   // Add/Edit Transaction modal
   const [showAddModal, setShowAddModal] = useState(false);
@@ -51,19 +78,24 @@ export const BudgetingModule: React.FC<BudgetingModuleProps> = ({
   const [newDesc, setNewDesc] = useState('');
   const [newAmount, setNewAmount] = useState('');
   const [newType, setNewType] = useState<'INCOME' | 'EXPENSE'>('EXPENSE');
-  const [newCategory, setNewCategory] = useState('Food');
+  const [newCategory, setNewCategory] = useState('Food & Dining');
   const [newAccount, setNewAccount] = useState('HDFC Bank UPI');
   const [newDate, setNewDate] = useState(() => new Date().toISOString().split('T')[0]);
+
+  // Split Modal
+  const [splitTx, setSplitTx] = useState<Transaction | null>(null);
+  const [splitRows, setSplitRows] = useState<Array<{ category: string; amount: string }>>([]);
 
   // Budget Modal
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [budgetName, setBudgetName] = useState('');
-  const [budgetCategory, setBudgetCategory] = useState('Food');
+  const [budgetCategory, setBudgetCategory] = useState('Food & Dining');
   const [budgetAllocated, setBudgetAllocated] = useState('');
   const [budgetThreshold, setBudgetThreshold] = useState('80');
 
-  // Import state
-  const [importTab, setImportTab] = useState<'sms' | 'file'>('sms');
+  // Import & Money Inbox state
+  const [importTab, setImportTab] = useState<'inbox' | 'sms' | 'file'>('inbox');
+  const [inboxFilter, setInboxFilter] = useState<'NEEDS_REVIEW' | 'ALL'>('NEEDS_REVIEW');
   const [smsText, setSmsText] = useState('');
   const [parsedSmsPreview, setParsedSmsPreview] = useState<StagedImportRow | null>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
@@ -158,6 +190,38 @@ export const BudgetingModule: React.FC<BudgetingModuleProps> = ({
     if (res.ok) {
       await refreshData();
     }
+  };
+
+  const handleInboxAction = async (
+    txId: string,
+    action: 'CONFIRM' | 'MARK_TRANSFER' | 'MARK_CARD_PAYMENT' | 'MARK_REFUND' | 'IGNORE' | 'SPLIT',
+    extra?: { category?: string; splitItems?: Array<{ category: string; amount: number }> }
+  ) => {
+    setModuleError(null);
+    setInboxFeedback(null);
+    const res = await apiFetch(`/api/v1/transactions/${txId}/inbox-action`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, ...extra }),
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      setModuleError(json?.error?.message || 'Unable to apply Money Inbox triage action.');
+      return;
+    }
+    await refreshData();
+    setInboxFeedback(`Updated transaction classification (${action.replace('_', ' ')}).`);
+    setTimeout(() => setInboxFeedback(null), 3000);
+  };
+
+  const handleSubmitSplit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!splitTx) return;
+    const splitItems = splitRows
+      .map(r => ({ category: r.category, amount: Math.round((parseFloat(r.amount) || 0) * 100) / 100 }))
+      .filter(r => r.amount > 0);
+    await handleInboxAction(splitTx.id, 'SPLIT', { splitItems });
+    setSplitTx(null);
   };
 
   const handleCreateBudget = async (e: React.FormEvent) => {
@@ -346,11 +410,15 @@ export const BudgetingModule: React.FC<BudgetingModuleProps> = ({
     }
   };
 
+  const activeTransactions = transactions.filter(t => !isDoubleCountExcluded(t));
   const totalAllocatedBudget = budgets.reduce((s, b) => s + b.allocatedAmount, 0);
-  const metrics = calculateBudgetMetrics(transactions, totalAllocatedBudget);
-  const expenseCount = transactions.filter(t => t.type === 'EXPENSE').length;
+  const metrics = calculateBudgetMetrics(activeTransactions, totalAllocatedBudget);
+  const expenseCount = activeTransactions.filter(t => t.type === 'EXPENSE').length;
   const remainingPct =
     totalAllocatedBudget > 0 ? Math.round((metrics.remainingBudget / totalAllocatedBudget) * 1000) / 10 : 0;
+
+  const needsReviewItems = transactions.filter(t => t.inboxStatus === 'NEEDS_REVIEW' || t.inboxStatus === 'DUPLICATE');
+  const inboxDisplayList = inboxFilter === 'NEEDS_REVIEW' ? needsReviewItems : transactions;
 
   const uniqueCategories = Array.from(new Set(transactions.map(t => t.category)));
 
@@ -362,9 +430,8 @@ export const BudgetingModule: React.FC<BudgetingModuleProps> = ({
     return matchesSearch && matchesCategory;
   });
 
-  // Dynamic spending breakdown for Insights tab
   const categoryBreakdown = Array.from(
-    transactions
+    activeTransactions
       .filter(t => t.type === 'EXPENSE')
       .reduce((map, tx) => {
         map.set(tx.category, (map.get(tx.category) || 0) + tx.amount);
@@ -380,18 +447,18 @@ export const BudgetingModule: React.FC<BudgetingModuleProps> = ({
     .sort((a, b) => b.amount - a.amount);
 
   return (
-    <div className="p-6 md:p-8 space-y-6 max-w-7xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#28443C] pb-6">
+    <div className="p-5 md:p-8 space-y-6 max-w-7xl mx-auto">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--fs-border)] pb-5">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#F5F7F5] tracking-tight">
+          <h1 className="font-display text-2xl sm:text-3xl font-extrabold text-[var(--fs-text)] tracking-tight">
             {subview === 'overview' && 'Smart Budgeting'}
-            {subview === 'transactions' && 'Transactions'}
-            {subview === 'import' && 'Import Financial Data'}
+            {subview === 'transactions' && 'Transactions Ledger'}
+            {subview === 'import' && 'Money Inbox & Statement Import'}
             {subview === 'budgets' && 'Monthly Budgets'}
             {subview === 'insights' && 'Spending Insights'}
           </h1>
-          <p className="text-xs text-[#A7C1B8] mt-1">
-            Organize UPI alerts, CSV/XLSX/PDF bank statements, and monthly category limits.
+          <p className="text-xs text-[var(--fs-text-body)] mt-1">
+            Triage uncategorized entries, exclude internal transfers from double-counting, and manage monthly category caps.
           </p>
         </div>
 
@@ -400,12 +467,12 @@ export const BudgetingModule: React.FC<BudgetingModuleProps> = ({
             onClick={() => onNavigate('/app/budgeting/import')}
             className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
               subview === 'import'
-                ? 'bg-[#16352E] text-[#A8E6CE] border-[#A8E6CE]'
-                : 'bg-[#102722] text-[#A7C1B8] border-[#28443C] hover:text-[#F5F7F5]'
+                ? 'bg-[var(--fs-surface-2)] text-[var(--fs-accent)] border-[var(--fs-accent)]'
+                : 'bg-[var(--fs-surface)] text-[var(--fs-text-body)] border-[var(--fs-border)] hover:text-[var(--fs-text)]'
             }`}
           >
-            <Upload className="h-3.5 w-3.5" />
-            <span>Import</span>
+            <Inbox className="h-3.5 w-3.5" />
+            <span>Money Inbox {needsReviewItems.length > 0 ? `(${needsReviewItems.length})` : ''}</span>
           </button>
           <button
             onClick={() => {
@@ -414,7 +481,7 @@ export const BudgetingModule: React.FC<BudgetingModuleProps> = ({
               setNewAmount('');
               setShowAddModal(true);
             }}
-            className="flex items-center gap-1.5 rounded-lg bg-[#A8E6CE] px-3.5 py-2 text-xs font-semibold text-[#0B1C19] hover:bg-[#72C8B0] transition-colors"
+            className="fs-btn-primary flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold"
           >
             <Plus className="h-3.5 w-3.5" />
             <span>Add Transaction</span>
@@ -423,18 +490,25 @@ export const BudgetingModule: React.FC<BudgetingModuleProps> = ({
       </div>
 
       {moduleError && (
-        <div className="p-3 rounded-xl bg-[#EB7676]/10 border border-[#EB7676]/40 text-xs text-[#EB7676] flex items-center gap-2">
+        <div className="p-3 rounded-xl bg-[var(--fs-danger)]/10 border border-[var(--fs-danger)]/40 text-xs text-[var(--fs-danger)] flex items-center gap-2">
           <AlertCircle className="h-4 w-4 shrink-0" />
           <span>{moduleError}</span>
         </div>
       )}
 
+      {inboxFeedback && (
+        <div className="p-3 rounded-xl bg-[var(--fs-success)]/10 border border-[var(--fs-success)]/40 text-xs text-[var(--fs-success)] flex items-center gap-2">
+          <CheckCircle className="h-4 w-4 shrink-0" />
+          <span>{inboxFeedback}</span>
+        </div>
+      )}
+
       {/* Sub-Navigation Tabs */}
-      <div className="flex items-center gap-2 border-b border-[#28443C] pb-2 overflow-x-auto whitespace-nowrap">
+      <div className="flex items-center gap-2 border-b border-[var(--fs-border)] pb-2 overflow-x-auto whitespace-nowrap">
         {[
           { label: 'Overview', path: '/app/budgeting', key: 'overview' },
           { label: 'Transactions', path: '/app/budgeting/transactions', key: 'transactions' },
-          { label: 'Import Statement / SMS', path: '/app/budgeting/import', key: 'import' },
+          { label: `Money Inbox & Import (${needsReviewItems.length})`, path: '/app/budgeting/import', key: 'import' },
           { label: 'Budgets', path: '/app/budgeting/budgets', key: 'budgets' },
           { label: 'Spending Insights', path: '/app/budgeting/insights', key: 'insights' },
         ].map(tab => (
@@ -443,8 +517,8 @@ export const BudgetingModule: React.FC<BudgetingModuleProps> = ({
             onClick={() => onNavigate(tab.path)}
             className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
               subview === tab.key
-                ? 'bg-[#16352E] text-[#A8E6CE] border border-[#28443C]'
-                : 'text-[#A7C1B8] hover:text-[#F5F7F5]'
+                ? 'bg-[var(--fs-brand)] text-white dark:text-[#0A1815]'
+                : 'text-[var(--fs-text-body)] hover:bg-[var(--fs-surface-2)] hover:text-[var(--fs-text)]'
             }`}
           >
             {tab.label}
@@ -456,50 +530,61 @@ export const BudgetingModule: React.FC<BudgetingModuleProps> = ({
       {subview === 'overview' && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-5 space-y-1">
-              <span className="text-xs text-[#718D83]">Total Income</span>
-              <div className="text-2xl font-bold text-[#55C99A] tabular-nums">{formatINR(metrics.totalIncome)}</div>
-              <span className="text-[11px] text-[#718D83]">Computed from recorded inflows</span>
+            <div className="fs-card p-5 space-y-1">
+              <span className="text-xs text-[var(--fs-text-muted)]">Net Income</span>
+              <div className="font-mono-num text-2xl font-bold text-[var(--fs-success)]">{formatINR(metrics.totalIncome)}</div>
+              <span className="text-[11px] text-[var(--fs-text-muted)]">Excludes internal transfers</span>
             </div>
-            <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-5 space-y-1">
-              <span className="text-xs text-[#718D83]">Total Spending</span>
-              <div className="text-2xl font-bold text-[#F5F7F5] tabular-nums">{formatINR(metrics.totalExpenses)}</div>
-              <span className="text-[11px] text-[#718D83]">{expenseCount} expense record{expenseCount === 1 ? '' : 's'}</span>
+            <div className="fs-card p-5 space-y-1">
+              <span className="text-xs text-[var(--fs-text-muted)]">Net Spending</span>
+              <div className="font-mono-num text-2xl font-bold text-[var(--fs-text)]">{formatINR(metrics.totalExpenses)}</div>
+              <span className="text-[11px] text-[var(--fs-text-muted)]">{expenseCount} active expense record{expenseCount === 1 ? '' : 's'}</span>
             </div>
-            <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-5 space-y-1">
-              <span className="text-xs text-[#718D83]">Remaining Allocated Budget</span>
-              <div className="text-2xl font-bold text-[#A8E6CE] tabular-nums">{formatINR(metrics.remainingBudget)}</div>
-              <span className="text-[11px] text-[#55C99A]">{remainingPct}% of {formatINR(totalAllocatedBudget)} remaining</span>
+            <div className="fs-card p-5 space-y-1">
+              <span className="text-xs text-[var(--fs-text-muted)]">Remaining Allocated Budget</span>
+              <div className="font-mono-num text-2xl font-bold text-[var(--fs-accent)]">{formatINR(metrics.remainingBudget)}</div>
+              <span className="text-[11px] text-[var(--fs-success)]">{remainingPct}% of {formatINR(totalAllocatedBudget)} remaining</span>
             </div>
-            <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-5 space-y-1">
-              <span className="text-xs text-[#718D83]">Savings Rate</span>
-              <div className={`text-2xl font-bold tabular-nums ${metrics.savingsRate >= 0 ? 'text-[#55C99A]' : 'text-[#EB7676]'}`}>
+            <div className="fs-card p-5 space-y-1">
+              <span className="text-xs text-[var(--fs-text-muted)]">Savings Rate</span>
+              <div className={`font-mono-num text-2xl font-bold ${metrics.savingsRate >= 0 ? 'text-[var(--fs-success)]' : 'text-[var(--fs-danger)]'}`}>
                 {metrics.savingsRate}%
               </div>
-              <span className="text-[11px] text-[#718D83]">Net surplus: {formatINR(metrics.savings)}</span>
+              <span className="text-[11px] text-[var(--fs-text-muted)]">Net surplus: {formatINR(metrics.savings)}</span>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-4">
+          <div className="fs-card p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-[#F5F7F5]">Recent Activity</h3>
-              <button onClick={() => onNavigate('/app/budgeting/transactions')} className="text-xs text-[#A8E6CE] hover:underline">
+              <h3 className="font-display text-sm font-bold text-[var(--fs-text)]">Recent Activity</h3>
+              <button onClick={() => onNavigate('/app/budgeting/transactions')} className="text-xs font-semibold text-[var(--fs-accent)] hover:underline">
                 View All Transactions →
               </button>
             </div>
             {transactions.length === 0 ? (
-              <div className="p-6 rounded-xl bg-[#0B1C19] border border-[#28443C] text-center text-xs text-[#718D83]">
-                No transactions yet. Add your first transaction or import a bank statement.
-              </div>
+              <EmptyStateCard
+                variant="transactions"
+                title="No transactions recorded yet"
+                description="Add a transaction manually, paste an Indian bank SMS alert, or upload a CSV/XLSX/PDF statement."
+                actionLabel="Open Money Inbox & Import"
+                onAction={() => onNavigate('/app/budgeting/import')}
+              />
             ) : (
-              <div className="divide-y divide-[#28443C]/50">
-                {transactions.slice(0, 5).map(tx => (
-                  <div key={tx.id} className="py-3 flex items-center justify-between text-xs">
+              <div className="divide-y divide-[var(--fs-border)]">
+                {transactions.slice(0, 6).map(tx => (
+                  <div key={tx.id} className="py-3 flex items-center justify-between text-xs gap-3">
                     <div>
-                      <div className="font-semibold text-[#F5F7F5]">{tx.description}</div>
-                      <div className="text-[10px] text-[#718D83]">{tx.category} · {tx.transactionDate} · {tx.account}</div>
+                      <div className="font-semibold text-[var(--fs-text)] flex items-center gap-2">
+                        <span>{tx.description}</span>
+                        {isDoubleCountExcluded(tx) && (
+                          <span className="text-[10px] font-mono-num text-[var(--fs-info)]">
+                            [Excluded: {tx.isCreditCardSettlement ? 'Card Settlement' : tx.isInternalTransfer ? 'Transfer' : tx.inboxStatus}]
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-[var(--fs-text-muted)]">{tx.category} · {tx.transactionDate} · {tx.account}</div>
                     </div>
-                    <div className={`font-semibold tabular-nums text-sm ${tx.type === 'INCOME' ? 'text-[#55C99A]' : 'text-[#F5F7F5]'}`}>
+                    <div className={`font-mono-num font-semibold text-sm ${tx.type === 'INCOME' ? 'text-[var(--fs-success)]' : 'text-[var(--fs-text)]'}`}>
                       {tx.type === 'INCOME' ? '+' : '-'}{formatINR(tx.amount)}
                     </div>
                   </div>
@@ -513,22 +598,22 @@ export const BudgetingModule: React.FC<BudgetingModuleProps> = ({
       {/* SUBVIEW 2: TRANSACTIONS TABLE */}
       {subview === 'transactions' && (
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row items-center gap-3 justify-between bg-[#102722] p-4 rounded-2xl border border-[#28443C]">
+          <div className="fs-card p-4 flex flex-col sm:flex-row items-center gap-3 justify-between">
             <div className="relative w-full sm:w-72">
-              <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-[#718D83]" />
+              <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-[var(--fs-text-muted)]" />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
                 placeholder="Search by description or merchant..."
-                className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] pl-9 pr-3 py-2 text-xs text-[#F5F7F5] placeholder-[#718D83] focus:outline-none focus:border-[#A8E6CE]"
+                className="fs-input w-full pl-9 pr-3 py-2 text-xs"
               />
             </div>
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <select
                 value={selectedCategory}
                 onChange={e => setSelectedCategory(e.target.value)}
-                className="rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5] focus:outline-none"
+                className="fs-input px-3 py-2 text-xs"
               >
                 <option value="ALL">All Categories</option>
                 {uniqueCategories.map(cat => (
@@ -538,52 +623,72 @@ export const BudgetingModule: React.FC<BudgetingModuleProps> = ({
             </div>
           </div>
 
-          <div className="rounded-2xl border border-[#28443C] bg-[#102722] overflow-x-auto">
+          <div className="fs-card overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-[#16352E]/40 border-b border-[#28443C] text-[#718D83]">
+              <thead className="bg-[var(--fs-surface-2)] border-b border-[var(--fs-border)] text-[var(--fs-text-muted)]">
                 <tr>
                   <th className="py-3 px-4 font-medium">Date</th>
                   <th className="py-3 px-4 font-medium">Description</th>
-                  <th className="py-3 px-4 font-medium">Category</th>
+                  <th className="py-3 px-4 font-medium">Category & Status</th>
                   <th className="py-3 px-4 font-medium">Source</th>
                   <th className="py-3 px-4 font-medium text-right">Amount</th>
                   <th className="py-3 px-4 font-medium text-right">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#28443C]/40">
+              <tbody className="divide-y divide-[var(--fs-border)]">
                 {filteredTransactions.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-8 text-center text-[#718D83]">
+                    <td colSpan={6} className="py-8 text-center text-[var(--fs-text-muted)]">
                       No transactions found. Import a statement or add your first transaction.
                     </td>
                   </tr>
                 ) : (
                   filteredTransactions.map(tx => (
-                    <tr key={tx.id} className="hover:bg-[#16352E]/20 transition-colors">
-                      <td className="py-3 px-4 text-[#718D83] whitespace-nowrap">{tx.transactionDate}</td>
-                      <td className="py-3 px-4 font-semibold text-[#F5F7F5]">
+                    <tr key={tx.id} className="hover:bg-[var(--fs-surface-2)]/50 transition-colors">
+                      <td className="py-3 px-4 text-[var(--fs-text-muted)] whitespace-nowrap font-mono-num">{tx.transactionDate}</td>
+                      <td className="py-3 px-4 font-semibold text-[var(--fs-text)]">
                         <div>{tx.description}</div>
-                        <div className="text-[10px] font-normal text-[#718D83]">{tx.account}</div>
+                        <div className="text-[11px] font-normal text-[var(--fs-text-muted)]">{tx.account}</div>
                       </td>
-                      <td className="py-3 px-4 text-[#A7C1B8]">{tx.category}</td>
-                      <td className="py-3 px-4 text-[10px] font-mono text-[#718D83]">{tx.source}</td>
-                      <td className={`py-3 px-4 text-right font-semibold tabular-nums whitespace-nowrap ${
-                        tx.type === 'INCOME' ? 'text-[#55C99A]' : 'text-[#F5F7F5]'
+                      <td className="py-3 px-4 text-[var(--fs-text-body)]">
+                        <div>{tx.category}</div>
+                        {tx.inboxStatus === 'NEEDS_REVIEW' && (
+                          <span className="text-[10px] font-semibold text-[var(--fs-warning)]">Needs Review</span>
+                        )}
+                        {isDoubleCountExcluded(tx) && (
+                          <span className="text-[10px] font-semibold text-[var(--fs-info)]">Excluded from double-counting</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-[10px] font-mono-num text-[var(--fs-text-muted)]">{tx.source}</td>
+                      <td className={`py-3 px-4 text-right font-mono-num font-semibold whitespace-nowrap ${
+                        tx.type === 'INCOME' ? 'text-[var(--fs-success)]' : 'text-[var(--fs-text)]'
                       }`}>
                         {tx.type === 'INCOME' ? '+' : '-'}{formatINR(tx.amount)}
                       </td>
                       <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => {
+                              setSplitTx(tx);
+                              setSplitRows([
+                                { category: tx.category, amount: String(Math.round((tx.amount / 2) * 100) / 100) },
+                                { category: 'Shopping', amount: String(Math.round((tx.amount - Math.round((tx.amount / 2) * 100) / 100) * 100) / 100) },
+                              ]);
+                            }}
+                            className="text-[var(--fs-text-muted)] hover:text-[var(--fs-accent)] p-1 rounded"
+                            title="Split Transaction"
+                          >
+                            <Split className="h-3.5 w-3.5" />
+                          </button>
                           <button
                             onClick={() => handleOpenEdit(tx)}
-                            className="text-[#718D83] hover:text-[#A8E6CE] p-1 rounded-md"
-                            title="Edit Transaction"
+                            className="text-[var(--fs-text-muted)] hover:text-[var(--fs-accent)] px-1.5 py-1 rounded text-[11px] font-medium"
                           >
                             Edit
                           </button>
                           <button
                             onClick={() => handleDeleteTransaction(tx.id)}
-                            className="text-[#718D83] hover:text-[#EB7676] p-1 rounded-md"
+                            className="text-[var(--fs-text-muted)] hover:text-[var(--fs-danger)] p-1 rounded"
                             title="Delete Transaction"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -599,43 +704,209 @@ export const BudgetingModule: React.FC<BudgetingModuleProps> = ({
         </div>
       )}
 
-      {/* SUBVIEW 3: IMPORT DATA */}
+      {/* SUBVIEW 3: MONEY INBOX & IMPORT DATA */}
       {subview === 'import' && (
-        <div className="space-y-6 max-w-4xl">
+        <div className="space-y-6 max-w-5xl">
           {importStatusMsg && (
-            <div className="p-4 rounded-xl bg-[#55C99A]/10 border border-[#55C99A]/40 text-xs text-[#55C99A] flex items-center gap-2">
+            <div className="p-4 rounded-xl bg-[var(--fs-success)]/10 border border-[var(--fs-success)]/40 text-xs text-[var(--fs-success)] flex items-center gap-2">
               <CheckCircle className="h-4 w-4 shrink-0" />
               <span>{importStatusMsg}</span>
             </div>
           )}
 
           {importErrorMsg && (
-            <div className="p-4 rounded-xl bg-[#EB7676]/10 border border-[#EB7676]/40 text-xs text-[#EB7676] flex items-center gap-2">
+            <div className="p-4 rounded-xl bg-[var(--fs-danger)]/10 border border-[var(--fs-danger)]/40 text-xs text-[var(--fs-danger)] flex items-center gap-2">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{importErrorMsg}</span>
             </div>
           )}
 
-          <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-6">
-            <div className="flex items-center gap-3 border-b border-[#28443C] pb-4">
+          <div className="fs-card p-6 space-y-6">
+            <div className="flex flex-wrap items-center gap-2 border-b border-[var(--fs-border)] pb-4">
+              <button
+                onClick={() => setImportTab('inbox')}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg ${
+                  importTab === 'inbox'
+                    ? 'bg-[var(--fs-brand)] text-white dark:text-[#0A1815]'
+                    : 'text-[var(--fs-text-body)] hover:bg-[var(--fs-surface-2)]'
+                }`}
+              >
+                Money Inbox Review ({needsReviewItems.length})
+              </button>
               <button
                 onClick={() => setImportTab('sms')}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg ${importTab === 'sms' ? 'bg-[#16352E] text-[#A8E6CE]' : 'text-[#A7C1B8]'}`}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg ${
+                  importTab === 'sms'
+                    ? 'bg-[var(--fs-brand)] text-white dark:text-[#0A1815]'
+                    : 'text-[var(--fs-text-body)] hover:bg-[var(--fs-surface-2)]'
+                }`}
               >
                 Paste Bank SMS Alert
               </button>
               <button
                 onClick={() => setImportTab('file')}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg ${importTab === 'file' ? 'bg-[#16352E] text-[#A8E6CE]' : 'text-[#A7C1B8]'}`}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg ${
+                  importTab === 'file'
+                    ? 'bg-[var(--fs-brand)] text-white dark:text-[#0A1815]'
+                    : 'text-[var(--fs-text-body)] hover:bg-[var(--fs-surface-2)]'
+                }`}
               >
                 Upload CSV / XLSX / PDF / TXT Statement
               </button>
             </div>
 
+            {importTab === 'inbox' && (
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h3 className="font-display text-sm font-bold text-[var(--fs-text)]">Transaction Triage & Anti-Double-Counting</h3>
+                    <p className="text-xs text-[var(--fs-text-muted)]">
+                      Confirm auto-detected categories, split mixed orders, or mark self-transfers & credit-card bill settlements.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1 rounded-lg bg-[var(--fs-surface-2)] p-1 border border-[var(--fs-border)]">
+                    <button
+                      type="button"
+                      onClick={() => setInboxFilter('NEEDS_REVIEW')}
+                      className={`px-2.5 py-1 rounded text-[11px] font-semibold ${
+                        inboxFilter === 'NEEDS_REVIEW'
+                          ? 'bg-[var(--fs-brand)] text-white dark:text-[#0A1815]'
+                          : 'text-[var(--fs-text-body)]'
+                      }`}
+                    >
+                      Needs Review ({needsReviewItems.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInboxFilter('ALL')}
+                      className={`px-2.5 py-1 rounded text-[11px] font-semibold ${
+                        inboxFilter === 'ALL'
+                          ? 'bg-[var(--fs-brand)] text-white dark:text-[#0A1815]'
+                          : 'text-[var(--fs-text-body)]'
+                      }`}
+                    >
+                      All ({transactions.length})
+                    </button>
+                  </div>
+                </div>
+
+                {inboxDisplayList.length === 0 ? (
+                  <EmptyStateCard
+                    variant="transactions"
+                    title={inboxFilter === 'NEEDS_REVIEW' ? 'Money Inbox is clean' : 'No transactions in Money Inbox'}
+                    description={
+                      inboxFilter === 'NEEDS_REVIEW'
+                        ? 'Every imported transaction has been verified or categorized. Import a new statement or SMS anytime.'
+                        : 'Paste a bank SMS alert or upload a CSV/XLSX/PDF statement to triage entries here.'
+                    }
+                    actionLabel="Import SMS or Statement"
+                    onAction={() => setImportTab('sms')}
+                  />
+                ) : (
+                  <div className="space-y-3">
+                    {inboxDisplayList.slice(0, 25).map(tx => (
+                      <div key={tx.id} className="p-4 rounded-xl bg-[var(--fs-surface-2)] border border-[var(--fs-border)] space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div>
+                            <div className="text-xs font-bold text-[var(--fs-text)] flex flex-wrap items-center gap-2">
+                              <span>{tx.description}</span>
+                              <span className="font-mono-num text-[10px] text-[var(--fs-text-muted)]">
+                                {tx.inboxStatus || 'CATEGORIZED'} · {tx.confidence ?? 85}% confidence
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-[var(--fs-text-body)] mt-0.5">
+                              {tx.transactionDate} · {tx.account} · Suggested: <strong>{tx.category}</strong>
+                            </div>
+                            {tx.suggestionReason && (
+                              <div className="text-[11px] text-[var(--fs-text-muted)] mt-0.5">{tx.suggestionReason}</div>
+                            )}
+                          </div>
+                          <div className={`font-mono-num text-base font-bold shrink-0 ${
+                            tx.type === 'INCOME' ? 'text-[var(--fs-success)]' : 'text-[var(--fs-text)]'
+                          }`}>
+                            {tx.type === 'INCOME' ? '+' : '-'}{formatINR(tx.amount)}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[var(--fs-border)]">
+                          <button
+                            type="button"
+                            onClick={() => handleInboxAction(tx.id, 'CONFIRM', { category: tx.category })}
+                            className="fs-btn-primary px-2.5 py-1 text-[11px] font-semibold inline-flex items-center gap-1"
+                          >
+                            <CheckCircle className="h-3 w-3" />
+                            <span>Confirm ({tx.category})</span>
+                          </button>
+                          <select
+                            aria-label={`Change category for ${tx.description}`}
+                            value={tx.category}
+                            onChange={e => handleInboxAction(tx.id, 'CONFIRM', { category: e.target.value })}
+                            className="fs-input px-2 py-1 text-[11px]"
+                          >
+                            {CATEGORIES.map(c => (
+                              <option key={c} value={c}>{c}</option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSplitTx(tx);
+                              setSplitRows([
+                                { category: tx.category, amount: String(Math.round((tx.amount / 2) * 100) / 100) },
+                                { category: 'Shopping', amount: String(Math.round((tx.amount - Math.round((tx.amount / 2) * 100) / 100) * 100) / 100) },
+                              ]);
+                            }}
+                            className="px-2.5 py-1 rounded-lg border border-[var(--fs-border)] bg-[var(--fs-surface)] text-[11px] text-[var(--fs-text)] hover:border-[var(--fs-accent)] inline-flex items-center gap-1"
+                          >
+                            <Split className="h-3 w-3" />
+                            <span>Split</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleInboxAction(tx.id, 'MARK_TRANSFER')}
+                            className="px-2.5 py-1 rounded-lg border border-[var(--fs-border)] bg-[var(--fs-surface)] text-[11px] text-[var(--fs-text-body)] hover:text-[var(--fs-text)] inline-flex items-center gap-1"
+                          >
+                            <ArrowLeftRight className="h-3 w-3" />
+                            <span>Transfer</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleInboxAction(tx.id, 'MARK_CARD_PAYMENT')}
+                            className="px-2.5 py-1 rounded-lg border border-[var(--fs-border)] bg-[var(--fs-surface)] text-[11px] text-[var(--fs-text-body)] hover:text-[var(--fs-text)] inline-flex items-center gap-1"
+                          >
+                            <CreditCard className="h-3 w-3" />
+                            <span>Card Payment</span>
+                          </button>
+                          {tx.type === 'INCOME' && (
+                            <button
+                              type="button"
+                              onClick={() => handleInboxAction(tx.id, 'MARK_REFUND')}
+                              className="px-2.5 py-1 rounded-lg border border-[var(--fs-border)] bg-[var(--fs-surface)] text-[11px] text-[var(--fs-text-body)] hover:text-[var(--fs-text)] inline-flex items-center gap-1"
+                            >
+                              <RotateCcw className="h-3 w-3" />
+                              <span>Refund</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleInboxAction(tx.id, 'IGNORE')}
+                            className="px-2.5 py-1 rounded-lg border border-[var(--fs-border)] bg-[var(--fs-surface)] text-[11px] text-[var(--fs-text-muted)] hover:text-[var(--fs-danger)] inline-flex items-center gap-1"
+                          >
+                            <EyeOff className="h-3 w-3" />
+                            <span>Ignore</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {importTab === 'sms' && (
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs font-medium text-[#A7C1B8] mb-1">
+                  <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">
                     Paste Bank SMS or UPI alert:
                   </label>
                   <textarea
@@ -643,43 +914,43 @@ export const BudgetingModule: React.FC<BudgetingModuleProps> = ({
                     value={smsText}
                     onChange={e => setSmsText(e.target.value)}
                     placeholder="e.g. Sent Rs.450.00 from HDFC Bank A/C **4102 to ZOMATO on 05-03-26. UPI Ref 606512345678."
-                    className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] p-3 text-xs text-[#F5F7F5] placeholder-[#718D83] focus:border-[#A8E6CE] focus:outline-none"
+                    className="fs-input w-full p-3 text-xs"
                   />
                 </div>
                 <button
                   type="button"
                   onClick={handleParseSms}
-                  className="rounded-xl bg-[#16352E] border border-[#28443C] px-4 py-2 text-xs font-semibold text-[#A8E6CE] hover:border-[#72C8B0]"
+                  className="fs-btn-primary px-4 py-2 text-xs font-semibold"
                 >
                   Preview Parsed Data
                 </button>
 
                 {parsedSmsPreview && (
-                  <div className="p-4 rounded-xl bg-[#0B1C19] border border-[#28443C] space-y-3">
+                  <div className="p-4 rounded-xl bg-[var(--fs-surface-2)] border border-[var(--fs-border)] space-y-3">
                     {duplicateWarning && (
-                      <div className="p-3 rounded-lg bg-[#E5B764]/10 border border-[#E5B764]/40 text-xs text-[#E5B764] flex items-center gap-2">
+                      <div className="p-3 rounded-lg bg-[var(--fs-warning)]/10 border border-[var(--fs-warning)]/40 text-xs text-[var(--fs-warning)] flex items-center gap-2">
                         <AlertCircle className="h-4 w-4 shrink-0" />
                         <span>{duplicateWarning}</span>
                       </div>
                     )}
-                    <h4 className="text-xs font-bold text-[#F5F7F5]">Extracted Transaction Preview:</h4>
+                    <h4 className="text-xs font-bold text-[var(--fs-text)]">Extracted Transaction Preview:</h4>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                      <div><span className="text-[#718D83]">Merchant:</span> <span className="text-[#F5F7F5]">{parsedSmsPreview.merchant}</span></div>
-                      <div><span className="text-[#718D83]">Amount:</span> <span className="text-[#55C99A] font-bold">{formatINR(parsedSmsPreview.amount)}</span></div>
-                      <div><span className="text-[#718D83]">Type:</span> <span className="text-[#F5F7F5]">{parsedSmsPreview.type}</span></div>
-                      <div><span className="text-[#718D83]">Category:</span> <span className="text-[#F5F7F5]">{parsedSmsPreview.category}</span></div>
+                      <div><span className="text-[var(--fs-text-muted)]">Merchant:</span> <span className="text-[var(--fs-text)] font-medium">{parsedSmsPreview.merchant}</span></div>
+                      <div><span className="text-[var(--fs-text-muted)]">Amount:</span> <span className="text-[var(--fs-success)] font-mono-num font-bold">{formatINR(parsedSmsPreview.amount)}</span></div>
+                      <div><span className="text-[var(--fs-text-muted)]">Type:</span> <span className="text-[var(--fs-text)]">{parsedSmsPreview.type}</span></div>
+                      <div><span className="text-[var(--fs-text-muted)]">Category:</span> <span className="text-[var(--fs-text)]">{parsedSmsPreview.category}</span></div>
                     </div>
                     <div className="flex gap-2 pt-2">
                       <button
                         onClick={handleConfirmSmsImport}
                         disabled={isImporting}
-                        className="rounded-lg bg-[#A8E6CE] px-4 py-2 text-xs font-bold text-[#0B1C19] disabled:opacity-60"
+                        className="fs-btn-primary px-4 py-2 text-xs font-semibold disabled:opacity-60"
                       >
                         {isImporting ? 'Importing...' : 'Confirm & Import to Account'}
                       </button>
                       <button
                         onClick={() => { setParsedSmsPreview(null); setDuplicateWarning(null); }}
-                        className="rounded-lg border border-[#28443C] px-3 py-2 text-xs text-[#718D83]"
+                        className="rounded-lg border border-[var(--fs-border)] px-3 py-2 text-xs text-[var(--fs-text-muted)]"
                       >
                         Cancel
                       </button>
@@ -691,16 +962,16 @@ export const BudgetingModule: React.FC<BudgetingModuleProps> = ({
 
             {importTab === 'file' && (
               <div className="space-y-4">
-                <div className="p-8 border-2 border-dashed border-[#28443C] rounded-2xl text-center space-y-3">
-                  <FileText className="h-10 w-10 mx-auto text-[#718D83]" />
-                  <div className="text-xs font-semibold text-[#F5F7F5]">Upload Bank Statement (CSV, XLSX, PDF, or TXT)</div>
-                  <p className="text-[11px] text-[#718D83]">Maximum file size: 10MB. Parsed on server with duplicate candidate detection.</p>
+                <div className="p-8 border-2 border-dashed border-[var(--fs-border)] rounded-2xl text-center space-y-3 bg-[var(--fs-surface-2)]/40">
+                  <FileText className="h-10 w-10 mx-auto text-[var(--fs-text-muted)]" />
+                  <div className="text-xs font-semibold text-[var(--fs-text)]">Upload Bank Statement (CSV, XLSX, PDF, or TXT)</div>
+                  <p className="text-[11px] text-[var(--fs-text-muted)]">Maximum file size: 10MB. Parsed on server with duplicate candidate detection.</p>
                   <input
                     type="file"
                     accept=".csv,.xlsx,.pdf,.txt"
                     className="hidden"
                     id="statement-file-input"
-                    onChange={(e) => {
+                    onChange={e => {
                       const file = e.target.files?.[0];
                       if (file) {
                         handleStatementFileSelected(file);
@@ -710,7 +981,7 @@ export const BudgetingModule: React.FC<BudgetingModuleProps> = ({
                   />
                   <label
                     htmlFor="statement-file-input"
-                    className="inline-flex items-center gap-2 cursor-pointer rounded-xl bg-[#A8E6CE] px-4 py-2 text-xs font-bold text-[#0B1C19] hover:bg-[#72C8B0]"
+                    className="fs-btn-primary inline-flex items-center gap-2 cursor-pointer px-4 py-2 text-xs font-semibold"
                   >
                     {isParsing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
                     <span>{isParsing ? 'Parsing Statement...' : 'Browse Statement File'}</span>
@@ -718,22 +989,22 @@ export const BudgetingModule: React.FC<BudgetingModuleProps> = ({
                 </div>
 
                 {stagedBatch && (
-                  <div className="rounded-xl bg-[#0B1C19] border border-[#28443C] p-4 space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#28443C] pb-3">
+                  <div className="rounded-xl bg-[var(--fs-surface-2)] border border-[var(--fs-border)] p-4 space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[var(--fs-border)] pb-3">
                       <div>
-                        <h4 className="text-xs font-bold text-[#F5F7F5]">
+                        <h4 className="text-xs font-bold text-[var(--fs-text)]">
                           Staged Preview: {stagedBatch.fileName} ({stagedBatch.format})
                         </h4>
-                        <p className="text-[11px] text-[#718D83]">
+                        <p className="text-[11px] text-[var(--fs-text-muted)]">
                           {stagedBatch.transactions.length} transactions extracted · {stagedBatch.transactions.filter(t => t.isDuplicate).length} potential duplicate(s) flagged
                         </p>
                       </div>
-                      <label className="flex items-center gap-2 text-xs text-[#A7C1B8] cursor-pointer">
+                      <label className="flex items-center gap-2 text-xs text-[var(--fs-text-body)] cursor-pointer">
                         <input
                           type="checkbox"
                           checked={skipDuplicates}
                           onChange={e => setSkipDuplicates(e.target.checked)}
-                          className="rounded border-[#28443C]"
+                          className="rounded border-[var(--fs-border)]"
                         />
                         <span>Skip flagged duplicates</span>
                       </label>
@@ -741,7 +1012,7 @@ export const BudgetingModule: React.FC<BudgetingModuleProps> = ({
 
                     <div className="max-h-64 overflow-y-auto overflow-x-auto">
                       <table className="w-full text-left text-xs">
-                        <thead className="text-[#718D83] border-b border-[#28443C]">
+                        <thead className="text-[var(--fs-text-muted)] border-b border-[var(--fs-border)]">
                           <tr>
                             <th className="py-2 pr-3">Date</th>
                             <th className="py-2 pr-3">Description</th>
@@ -750,20 +1021,18 @@ export const BudgetingModule: React.FC<BudgetingModuleProps> = ({
                             <th className="py-2 text-right">Amount</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-[#28443C]/40">
+                        <tbody className="divide-y divide-[var(--fs-border)]">
                           {stagedBatch.transactions.map((row, idx) => (
                             <tr key={idx}>
-                              <td className="py-2 pr-3 text-[#718D83] whitespace-nowrap">{row.transactionDate}</td>
-                              <td className="py-2 pr-3 text-[#F5F7F5]">{row.description}</td>
-                              <td className="py-2 pr-3 text-[#A7C1B8]">{row.category}</td>
+                              <td className="py-2 pr-3 text-[var(--fs-text-muted)] whitespace-nowrap font-mono-num">{row.transactionDate}</td>
+                              <td className="py-2 pr-3 text-[var(--fs-text)]">{row.description}</td>
+                              <td className="py-2 pr-3 text-[var(--fs-text-body)]">{row.category}</td>
                               <td className="py-2 pr-3">
-                                {row.isDuplicate ? (
-                                  <span className="px-2 py-0.5 rounded bg-[#E5B764]/20 text-[#E5B764] text-[10px] font-bold">DUPLICATE</span>
-                                ) : (
-                                  <span className="px-2 py-0.5 rounded bg-[#55C99A]/20 text-[#55C99A] text-[10px] font-bold">NEW</span>
-                                )}
+                                <span className={`text-[10px] font-bold ${row.isDuplicate ? 'text-[var(--fs-warning)]' : 'text-[var(--fs-success)]'}`}>
+                                  {row.isDuplicate ? 'DUPLICATE' : 'NEW'}
+                                </span>
                               </td>
-                              <td className={`py-2 text-right font-semibold tabular-nums ${row.type === 'INCOME' ? 'text-[#55C99A]' : 'text-[#F5F7F5]'}`}>
+                              <td className={`py-2 text-right font-mono-num font-semibold ${row.type === 'INCOME' ? 'text-[var(--fs-success)]' : 'text-[var(--fs-text)]'}`}>
                                 {row.type === 'INCOME' ? '+' : '-'}{formatINR(row.amount)}
                               </td>
                             </tr>
@@ -772,17 +1041,17 @@ export const BudgetingModule: React.FC<BudgetingModuleProps> = ({
                       </table>
                     </div>
 
-                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#28443C]">
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--fs-border)]">
                       <button
                         onClick={() => setStagedBatch(null)}
-                        className="rounded-lg border border-[#28443C] px-3 py-2 text-xs text-[#718D83]"
+                        className="rounded-lg border border-[var(--fs-border)] px-3 py-2 text-xs text-[var(--fs-text-muted)]"
                       >
                         Discard
                       </button>
                       <button
                         onClick={handleConfirmBatchImport}
                         disabled={isImporting}
-                        className="rounded-lg bg-[#A8E6CE] px-4 py-2 text-xs font-bold text-[#0B1C19] disabled:opacity-60"
+                        className="fs-btn-primary px-4 py-2 text-xs font-semibold disabled:opacity-60"
                       >
                         {isImporting ? 'Importing...' : 'Confirm & Commit Batch Import'}
                       </button>
@@ -793,22 +1062,21 @@ export const BudgetingModule: React.FC<BudgetingModuleProps> = ({
             )}
           </div>
 
-          {/* Import History */}
-          <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-3">
-            <h3 className="text-sm font-bold text-[#F5F7F5]">Statement Import History</h3>
+          <div className="fs-card p-6 space-y-3">
+            <h3 className="font-display text-sm font-bold text-[var(--fs-text)]">Statement Import History</h3>
             {importJobs.length === 0 ? (
-              <p className="text-xs text-[#718D83]">No statement import jobs recorded yet.</p>
+              <p className="text-xs text-[var(--fs-text-muted)]">No statement import jobs recorded yet.</p>
             ) : (
-              <div className="divide-y divide-[#28443C]/40 text-xs">
+              <div className="divide-y divide-[var(--fs-border)] text-xs">
                 {importJobs.map(job => (
                   <div key={job.id} className="py-2.5 flex items-center justify-between">
                     <div>
-                      <div className="font-semibold text-[#F5F7F5]">{job.fileName} <span className="text-[10px] font-mono text-[#A8E6CE]">[{job.format}]</span></div>
-                      <div className="text-[10px] text-[#718D83]">{job.createdAt.split('T')[0]} · {job.totalRowsParsed} parsed</div>
+                      <div className="font-semibold text-[var(--fs-text)]">{job.fileName} <span className="text-[10px] font-mono-num text-[var(--fs-accent)]">[{job.format}]</span></div>
+                      <div className="text-[11px] text-[var(--fs-text-muted)]">{job.createdAt.split('T')[0]} · {job.totalRowsParsed} parsed</div>
                     </div>
                     <div className="text-right">
-                      <div className="font-semibold text-[#55C99A]">{job.importedCount} imported</div>
-                      <div className="text-[10px] text-[#718D83]">{job.skippedDuplicatesCount} duplicates skipped</div>
+                      <div className="font-semibold text-[var(--fs-success)]">{job.importedCount} imported</div>
+                      <div className="text-[11px] text-[var(--fs-text-muted)]">{job.skippedDuplicatesCount} duplicates skipped</div>
                     </div>
                   </div>
                 ))}
@@ -822,10 +1090,10 @@ export const BudgetingModule: React.FC<BudgetingModuleProps> = ({
       {subview === 'budgets' && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <p className="text-xs text-[#A7C1B8]">Budgets automatically compute spent totals from your categorized expense transactions.</p>
+            <p className="text-xs text-[var(--fs-text-body)]">Budgets automatically compute spent totals from your non-transfer expense transactions.</p>
             <button
               onClick={() => setShowBudgetModal(true)}
-              className="flex items-center gap-1.5 rounded-lg bg-[#A8E6CE] px-3.5 py-2 text-xs font-bold text-[#0B1C19] hover:bg-[#72C8B0]"
+              className="fs-btn-primary flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold"
             >
               <Plus className="h-3.5 w-3.5" />
               <span>Create Budget</span>
@@ -833,49 +1101,47 @@ export const BudgetingModule: React.FC<BudgetingModuleProps> = ({
           </div>
 
           {budgets.length === 0 ? (
-            <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-8 text-center space-y-3">
-              <p className="text-xs text-[#718D83]">No monthly category budgets configured yet.</p>
-              <button
-                onClick={() => setShowBudgetModal(true)}
-                className="rounded-lg bg-[#A8E6CE] px-4 py-2 text-xs font-bold text-[#0B1C19]"
-              >
-                Create Your First Budget
-              </button>
-            </div>
+            <EmptyStateCard
+              variant="budgets"
+              title="No monthly category budgets configured"
+              description="Create monthly category envelopes (Food, Housing, Transport) to monitor threshold alerts automatically."
+              actionLabel="Create Your First Budget"
+              onAction={() => setShowBudgetModal(true)}
+            />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {budgets.map(b => {
                 const pct = b.allocatedAmount > 0 ? Math.round((b.spentAmount / b.allocatedAmount) * 100) : 0;
                 return (
-                  <div key={b.id} className="rounded-2xl border border-[#28443C] bg-[#102722] p-5 space-y-3">
+                  <div key={b.id} className="fs-card p-5 space-y-3">
                     <div className="flex items-center justify-between">
                       <div>
-                        <span className="text-sm font-bold text-[#F5F7F5]">{b.name}</span>
-                        <div className="text-[10px] text-[#718D83]">{b.category}</div>
+                        <span className="text-sm font-bold text-[var(--fs-text)]">{b.name}</span>
+                        <div className="text-[11px] text-[var(--fs-text-muted)]">{b.category}</div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className={`text-[10px] font-mono ${pct >= b.alertThreshold ? 'text-[#EB7676]' : 'text-[#A8E6CE]'}`}>
+                        <span className={`text-[11px] font-mono-num font-semibold ${pct >= b.alertThreshold ? 'text-[var(--fs-danger)]' : 'text-[var(--fs-accent)]'}`}>
                           {pct}% spent
                         </span>
                         <button
                           onClick={() => handleDeleteBudget(b.id)}
-                          className="text-[#718D83] hover:text-[#EB7676]"
+                          className="text-[var(--fs-text-muted)] hover:text-[var(--fs-danger)]"
                           title="Delete Budget"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
                     </div>
-                    <div className="text-xl font-bold text-[#F5F7F5] tabular-nums">
-                      {formatINR(b.spentAmount)} <span className="text-xs font-normal text-[#718D83]">/ {formatINR(b.allocatedAmount)}</span>
+                    <div className="font-mono-num text-xl font-bold text-[var(--fs-text)]">
+                      {formatINR(b.spentAmount)} <span className="text-xs font-normal text-[var(--fs-text-muted)]">/ {formatINR(b.allocatedAmount)}</span>
                     </div>
-                    <div className="h-2 w-full rounded-full bg-[#0B1C19] overflow-hidden">
+                    <div className="h-2 w-full rounded-full bg-[var(--fs-surface-2)] overflow-hidden">
                       <div
-                        className={`h-full rounded-full ${pct >= b.alertThreshold ? 'bg-[#EB7676]' : 'bg-[#55C99A]'}`}
+                        className={`h-full rounded-full ${pct >= b.alertThreshold ? 'bg-[var(--fs-danger)]' : 'bg-[var(--fs-success)]'}`}
                         style={{ width: `${Math.min(100, pct)}%` }}
                       />
                     </div>
-                    <div className="text-[11px] text-[#718D83] flex justify-between">
+                    <div className="text-[11px] text-[var(--fs-text-muted)] flex justify-between">
                       <span>Remaining: {formatINR(Math.max(0, b.allocatedAmount - b.spentAmount))}</span>
                       <span>Alert at {b.alertThreshold}%</span>
                     </div>
@@ -890,26 +1156,30 @@ export const BudgetingModule: React.FC<BudgetingModuleProps> = ({
       {/* SUBVIEW 5: SPENDING INSIGHTS */}
       {subview === 'insights' && (
         <div className="space-y-6 max-w-4xl">
-          <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-4">
+          <div className="fs-card p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-[#F5F7F5]">Live Category Spending Breakdown</h3>
-              <span className="text-xs text-[#718D83]">Total Outflow: {formatINR(metrics.totalExpenses)}</span>
+              <h3 className="font-display text-base font-bold text-[var(--fs-text)]">Live Category Spending Breakdown</h3>
+              <span className="font-mono-num text-xs text-[var(--fs-text-muted)]">Total Outflow: {formatINR(metrics.totalExpenses)}</span>
             </div>
 
             {categoryBreakdown.length === 0 ? (
-              <div className="p-6 rounded-xl bg-[#0B1C19] border border-[#28443C] text-xs text-[#718D83] text-center">
-                Add expense transactions or import a bank statement to generate real spending insights.
-              </div>
+              <EmptyStateCard
+                variant="budgets"
+                title="Add expenses to generate spending insights"
+                description="Once categorized expenses are recorded, FinSight maps your highest spend areas and prepares Gemini recommendations."
+                actionLabel="Add Transaction"
+                onAction={() => setShowAddModal(true)}
+              />
             ) : (
               <div className="space-y-3">
                 {categoryBreakdown.map(item => (
-                  <div key={item.category} className="p-4 rounded-xl bg-[#0B1C19] border border-[#28443C] space-y-2">
+                  <div key={item.category} className="p-4 rounded-xl bg-[var(--fs-surface-2)] border border-[var(--fs-border)] space-y-2">
                     <div className="flex justify-between text-xs">
-                      <span className="font-bold text-[#F5F7F5]">{item.category}</span>
-                      <span className="font-semibold text-[#A8E6CE] tabular-nums">{formatINR(item.amount)} ({item.pct}%)</span>
+                      <span className="font-bold text-[var(--fs-text)]">{item.category}</span>
+                      <span className="font-mono-num font-semibold text-[var(--fs-accent)]">{formatINR(item.amount)} ({item.pct}%)</span>
                     </div>
-                    <div className="h-2 w-full rounded-full bg-[#102722] overflow-hidden">
-                      <div className="h-full bg-[#A8E6CE] rounded-full" style={{ width: `${Math.min(100, item.pct)}%` }} />
+                    <div className="h-2 w-full rounded-full bg-[var(--fs-bg)] overflow-hidden">
+                      <div className="h-full bg-[var(--fs-accent)] rounded-full" style={{ width: `${Math.min(100, item.pct)}%` }} />
                     </div>
                   </div>
                 ))}
@@ -917,14 +1187,14 @@ export const BudgetingModule: React.FC<BudgetingModuleProps> = ({
             )}
 
             {aiSpendingInsight && (
-              <div className="p-4 rounded-xl bg-[#16352E]/60 border border-[#A8E6CE]/40 space-y-1.5">
-                <div className="text-xs font-bold text-[#A8E6CE]">Gemini 4 Hydrogen Spending Analysis</div>
-                <div className="text-xs text-[#F5F7F5] whitespace-pre-wrap leading-relaxed">{aiSpendingInsight}</div>
+              <div className="p-4 rounded-xl bg-[var(--fs-surface-2)] border border-[var(--fs-accent)]/40 space-y-1.5">
+                <div className="text-xs font-bold text-[var(--fs-accent)]">Gemini 4 Hydrogen Spending Analysis</div>
+                <div className="text-xs text-[var(--fs-text)] whitespace-pre-wrap leading-relaxed">{aiSpendingInsight}</div>
               </div>
             )}
 
             {aiInsightError && (
-              <div className="p-3 rounded-xl bg-[#EB7676]/10 border border-[#EB7676]/40 text-xs text-[#EB7676] flex items-center gap-2">
+              <div className="p-3 rounded-xl bg-[var(--fs-danger)]/10 border border-[var(--fs-danger)]/40 text-xs text-[var(--fs-danger)] flex items-center gap-2">
                 <AlertCircle className="h-4 w-4 shrink-0" />
                 <span>{aiInsightError}</span>
               </div>
@@ -934,14 +1204,14 @@ export const BudgetingModule: React.FC<BudgetingModuleProps> = ({
               <button
                 onClick={handleRequestSpendingAiInsight}
                 disabled={aiInsightLoading}
-                className="rounded-xl bg-[#A8E6CE] px-4 py-2 text-xs font-bold text-[#0B1C19] hover:bg-[#72C8B0] disabled:opacity-60 flex items-center gap-2"
+                className="fs-btn-primary px-4 py-2 text-xs font-semibold disabled:opacity-60 flex items-center gap-2"
               >
                 {aiInsightLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
                 <span>{aiInsightLoading ? 'Analyzing...' : 'Generate AI Spending Insights'}</span>
               </button>
               <button
                 onClick={onOpenAI}
-                className="rounded-xl bg-[#16352E] border border-[#28443C] px-4 py-2 text-xs font-semibold text-[#A8E6CE] hover:border-[#72C8B0]"
+                className="rounded-lg border border-[var(--fs-border)] px-4 py-2 text-xs font-semibold text-[var(--fs-text)] hover:bg-[var(--fs-surface-2)]"
               >
                 Ask AI in Chat Drawer
               </button>
@@ -950,28 +1220,89 @@ export const BudgetingModule: React.FC<BudgetingModuleProps> = ({
         </div>
       )}
 
+      {/* Split Transaction Modal */}
+      {splitTx && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md fs-card p-6 space-y-4 shadow-2xl">
+            <div>
+              <h3 className="font-display text-base font-bold text-[var(--fs-text)]">Split Transaction</h3>
+              <p className="text-xs text-[var(--fs-text-muted)] mt-0.5">
+                {splitTx.description} · Original Total: <strong className="font-mono-num">{formatINR(splitTx.amount)}</strong>
+              </p>
+            </div>
+            <form onSubmit={handleSubmitSplit} className="space-y-3">
+              {splitRows.map((row, idx) => (
+                <div key={idx} className="grid grid-cols-2 gap-2">
+                  <select
+                    value={row.category}
+                    onChange={e =>
+                      setSplitRows(prev => prev.map((r, i) => (i === idx ? { ...r, category: e.target.value } : r)))
+                    }
+                    className="fs-input px-2.5 py-2 text-xs"
+                  >
+                    {CATEGORIES.map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={row.amount}
+                    onChange={e =>
+                      setSplitRows(prev => prev.map((r, i) => (i === idx ? { ...r, amount: e.target.value } : r)))
+                    }
+                    className="fs-input px-2.5 py-2 text-xs font-mono-num"
+                    required
+                  />
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => setSplitRows(prev => [...prev, { category: 'Other', amount: '0' }])}
+                className="text-xs font-semibold text-[var(--fs-accent)] hover:underline"
+              >
+                + Add another split line
+              </button>
+              <div className="flex justify-end gap-2 pt-3 border-t border-[var(--fs-border)]">
+                <button
+                  type="button"
+                  onClick={() => setSplitTx(null)}
+                  className="rounded-lg border border-[var(--fs-border)] px-4 py-2 text-xs text-[var(--fs-text-muted)]"
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="fs-btn-primary px-4 py-2 text-xs font-semibold">
+                  Save Split
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Add / Edit Transaction Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-4 shadow-2xl">
-            <h3 className="text-base font-bold text-[#F5F7F5]">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md fs-card p-6 space-y-4 shadow-2xl">
+            <h3 className="font-display text-base font-bold text-[var(--fs-text)]">
               {editingTxId ? 'Edit Transaction' : 'Add New Transaction'}
             </h3>
             <form onSubmit={handleSaveTransaction} className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Description</label>
+                <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Description</label>
                 <input
                   type="text"
                   value={newDesc}
                   onChange={e => setNewDesc(e.target.value)}
                   placeholder="e.g. Swiggy Groceries Order"
-                  className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                  className="fs-input w-full px-3 py-2 text-xs"
                   required
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Amount (₹)</label>
+                  <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Amount (₹)</label>
                   <input
                     type="number"
                     step="0.01"
@@ -979,16 +1310,16 @@ export const BudgetingModule: React.FC<BudgetingModuleProps> = ({
                     value={newAmount}
                     onChange={e => setNewAmount(e.target.value)}
                     placeholder="1200"
-                    className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                    className="fs-input w-full px-3 py-2 text-xs"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Type</label>
+                  <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Type</label>
                   <select
                     value={newType}
                     onChange={e => setNewType(e.target.value as 'INCOME' | 'EXPENSE')}
-                    className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                    className="fs-input w-full px-3 py-2 text-xs"
                   >
                     <option value="EXPENSE">Expense</option>
                     <option value="INCOME">Income</option>
@@ -997,54 +1328,45 @@ export const BudgetingModule: React.FC<BudgetingModuleProps> = ({
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Category</label>
+                  <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Category</label>
                   <select
                     value={newCategory}
                     onChange={e => setNewCategory(e.target.value)}
-                    className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                    className="fs-input w-full px-3 py-2 text-xs"
                   >
-                    <option value="Food">Food</option>
-                    <option value="Housing">Housing</option>
-                    <option value="Transport">Transport</option>
-                    <option value="Shopping">Shopping</option>
-                    <option value="Utilities">Utilities</option>
-                    <option value="Investments">Investments</option>
-                    <option value="Salary">Salary</option>
-                    <option value="Consulting">Consulting</option>
-                    <option value="General Expense">General Expense</option>
+                    {CATEGORIES.map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Date</label>
+                  <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Date</label>
                   <input
                     type="date"
                     value={newDate}
                     onChange={e => setNewDate(e.target.value)}
-                    className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                    className="fs-input w-full px-3 py-2 text-xs"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Account</label>
+                <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Account</label>
                 <input
                   type="text"
                   value={newAccount}
                   onChange={e => setNewAccount(e.target.value)}
-                  className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                  className="fs-input w-full px-3 py-2 text-xs"
                 />
               </div>
-              <div className="flex justify-end gap-2 pt-3 border-t border-[#28443C]">
+              <div className="flex justify-end gap-2 pt-3 border-t border-[var(--fs-border)]">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="rounded-xl border border-[#28443C] px-4 py-2 text-xs text-[#718D83]"
+                  className="rounded-lg border border-[var(--fs-border)] px-4 py-2 text-xs text-[var(--fs-text-muted)]"
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  className="rounded-xl bg-[#A8E6CE] px-4 py-2 text-xs font-bold text-[#0B1C19]"
-                >
+                <button type="submit" className="fs-btn-primary px-4 py-2 text-xs font-semibold">
                   Save Transaction
                 </button>
               </div>
@@ -1055,73 +1377,71 @@ export const BudgetingModule: React.FC<BudgetingModuleProps> = ({
 
       {/* Create Budget Modal */}
       {showBudgetModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-4 shadow-2xl">
-            <h3 className="text-base font-bold text-[#F5F7F5]">Create Category Budget</h3>
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md fs-card p-6 space-y-4 shadow-2xl">
+            <h3 className="font-display text-base font-bold text-[var(--fs-text)]">Create Category Budget</h3>
             <form onSubmit={handleCreateBudget} className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Budget Label</label>
+                <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Budget Label</label>
                 <input
                   type="text"
                   value={budgetName}
                   onChange={e => setBudgetName(e.target.value)}
                   placeholder="e.g. Monthly Groceries & Dining"
-                  className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                  className="fs-input w-full px-3 py-2 text-xs"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Category</label>
+                  <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Category</label>
                   <select
                     value={budgetCategory}
                     onChange={e => setBudgetCategory(e.target.value)}
-                    className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                    className="fs-input w-full px-3 py-2 text-xs"
                   >
+                    <option value="Food & Dining">Food & Dining</option>
                     <option value="Food">Food</option>
-                    <option value="Housing">Housing</option>
+                    <option value="Housing & Utilities">Housing & Utilities</option>
                     <option value="Transport">Transport</option>
                     <option value="Shopping">Shopping</option>
-                    <option value="Utilities">Utilities</option>
+                    <option value="Subscriptions">Subscriptions</option>
                     <option value="Investments">Investments</option>
                     <option value="General Expense">General Expense</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Monthly Limit (₹)</label>
+                  <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Monthly Limit (₹)</label>
                   <input
                     type="number"
                     min="1"
                     value={budgetAllocated}
                     onChange={e => setBudgetAllocated(e.target.value)}
                     placeholder="15000"
-                    className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                    className="fs-input w-full px-3 py-2 text-xs"
                     required
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#A7C1B8] mb-1">Alert Threshold (%)</label>
+                <label className="block text-xs font-medium text-[var(--fs-text-body)] mb-1">Alert Threshold (%)</label>
                 <input
                   type="number"
                   min="10"
                   max="100"
                   value={budgetThreshold}
                   onChange={e => setBudgetThreshold(e.target.value)}
-                  className="w-full rounded-xl bg-[#0B1C19] border border-[#28443C] px-3 py-2 text-xs text-[#F5F7F5]"
+                  className="fs-input w-full px-3 py-2 text-xs"
                 />
               </div>
-              <div className="flex justify-end gap-2 pt-3 border-t border-[#28443C]">
+              <div className="flex justify-end gap-2 pt-3 border-t border-[var(--fs-border)]">
                 <button
                   type="button"
                   onClick={() => setShowBudgetModal(false)}
-                  className="rounded-xl border border-[#28443C] px-4 py-2 text-xs text-[#718D83]"
+                  className="rounded-lg border border-[var(--fs-border)] px-4 py-2 text-xs text-[var(--fs-text-muted)]"
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  className="rounded-xl bg-[#A8E6CE] px-4 py-2 text-xs font-bold text-[#0B1C19]"
-                >
+                <button type="submit" className="fs-btn-primary px-4 py-2 text-xs font-semibold">
                   Save Budget
                 </button>
               </div>

@@ -30,6 +30,17 @@ import {
   AuditLog,
   WatchlistItem,
   ImportJobRecord,
+  ManualAssetLiability,
+  MoneyGoal,
+  MoneyCalendarEvent,
+  CreditCard,
+  CreditCardStatement,
+  RecurringPayment,
+  FinancialHealthSnapshot,
+  BusinessReconciliationRun,
+  PaymentFollowUp,
+  InvestmentJournalEntry,
+  TaxReadinessItem,
 } from './src/types';
 import {
   calculateBudgetMetrics,
@@ -39,6 +50,21 @@ import {
   runHistoricalBacktest,
   validateGSTIN,
 } from './src/utils/financialMath';
+import {
+  buildCashFlowRadar,
+  classifyInboxTransaction,
+  computeCreditCardSummary,
+  computeDebtPayoffSchedule,
+  computeFinancialHealthSummary,
+  computeGoalProjection,
+  computePortfolioRiskAnalytics,
+  computeReceivablesAging,
+  detectRecurringPayments,
+  inspectFraudSignals,
+  isDoubleCountExcluded,
+  runDeterministicReconciliation,
+  simulateCreditCardPayment,
+} from './src/utils/financialIntelligence';
 import {
   flagDuplicateCandidates,
   parseBankSMS,
@@ -58,6 +84,7 @@ import {
 } from './src/server/geminiService';
 import { createVaultStore, validateFileUpload } from './src/server/fileVault';
 import { generateInvoicePdfBuffer } from './src/server/invoicePdf';
+import { generateHealthReportPdfBuffer } from './src/server/healthReportPdf';
 
 dotenv.config();
 
@@ -280,6 +307,7 @@ export function createApp(options: CreateAppOptions = {}) {
         financialYear: db.systemSettings.defaultFinancialYear,
         currency: 'INR',
         language: 'English',
+        theme: 'light',
         numberFormat: 'INDIAN',
         experienceLevel: 'Intermediate',
         explanationLevel: 'Balanced',
@@ -304,6 +332,7 @@ export function createApp(options: CreateAppOptions = {}) {
       db.userPreferences.push(pref);
       saveStore();
     }
+    if (!pref.theme) pref.theme = 'light';
     return pref;
   }
 
@@ -375,19 +404,36 @@ export function createApp(options: CreateAppOptions = {}) {
 
   function buildUserFinancialSummary(uid: string) {
     const txs = db.transactions.filter(t => t.ownerId === uid);
+    const activeTxs = txs.filter(t => !isDoubleCountExcluded(t));
     const budgets = db.budgets.filter(b => b.ownerId === uid);
     const holdings = db.holdings.filter(h => h.ownerId === uid);
     const taxDed = db.taxDeductions.filter(d => d.ownerId === uid);
     const taxProf = db.taxProfiles.find(p => p.ownerId === uid);
     const invoices = db.invoices.filter(i => i.ownerId === uid);
     const bizExp = db.businessExpenses.filter(e => e.ownerId === uid);
+    const creditCards = db.creditCards.filter(c => c.ownerId === uid);
+    const goals = db.moneyGoals.filter(g => g.ownerId === uid);
+    const manualItems = db.manualAssetsLiabilities.filter(m => m.ownerId === uid);
+    const recurring = db.recurringPayments.filter(r => r.ownerId === uid && r.status !== 'CANCELLED' && r.status !== 'IGNORED');
+    const bp = db.businessProfiles.find(b => b.ownerId === uid);
 
-    const budgetMetrics = calculateBudgetMetrics(txs, budgets.reduce((s, b) => s + b.allocatedAmount, 0));
+    const budgetMetrics = calculateBudgetMetrics(activeTxs, budgets.reduce((s, b) => s + b.allocatedAmount, 0));
     const portfolioCurrent = holdings.reduce((s, h) => s + h.quantity * h.currentPrice, 0);
     const portfolioCost = holdings.reduce((s, h) => s + h.quantity * h.purchasePrice, 0);
+    const health = computeFinancialHealthSummary({
+      transactions: txs,
+      holdings,
+      creditCards,
+      goals,
+      manualItems,
+      openingCashBalance: bp?.openingCashBalance || 0,
+    });
+    const cardSummary = computeCreditCardSummary(creditCards);
+    const receivables = computeReceivablesAging(invoices);
 
     return {
       transactionCount: txs.length,
+      needsReviewCount: txs.filter(t => t.inboxStatus === 'NEEDS_REVIEW').length,
       totalIncome: budgetMetrics.totalIncome,
       totalExpenses: budgetMetrics.totalExpenses,
       savings: budgetMetrics.savings,
@@ -396,13 +442,23 @@ export function createApp(options: CreateAppOptions = {}) {
       holdingsCount: holdings.length,
       portfolioValue: Math.round(portfolioCurrent * 100) / 100,
       portfolioCostBasis: Math.round(portfolioCost * 100) / 100,
+      financialHealthIndex: health.compositeIndex,
+      estimatedNetWorth: health.estimatedNetWorth,
+      emergencyFundMonths: health.emergencyFundCoverageMonths,
+      goalsCount: goals.length,
+      creditCardsCount: creditCards.length,
+      creditCardBalance: cardSummary.totalOutstandingBalance,
+      creditCardUtilizationPct: cardSummary.overallUtilizationPct,
+      activeRecurringCount: recurring.length,
+      monthlyRecurringEstimate: Math.round(recurring.reduce((s, r) => s + r.estimatedAmount, 0)),
       taxProfile: taxProf
         ? { financialYear: taxProf.financialYear, annualSalary: taxProf.annualSalary, otherIncome: taxProf.otherIncome }
         : null,
       taxDeductionsTotal: taxDed.reduce((s, d) => s + d.claimedAmount, 0),
       invoicesCount: invoices.length,
       totalInvoiced: invoices.reduce((s, i) => s + i.total, 0),
-      outstandingReceivables: invoices.reduce((s, i) => s + i.balanceDue, 0),
+      outstandingReceivables: receivables.totalOutstanding,
+      overdueReceivables: receivables.overdueAmount,
       businessExpensesTotal: bizExp.reduce((s, e) => s + e.amount, 0),
     };
   }
@@ -626,6 +682,7 @@ export function createApp(options: CreateAppOptions = {}) {
     if (typeof body.financialYear === 'string') pref.financialYear = body.financialYear;
     if (typeof body.currency === 'string') pref.currency = body.currency.slice(0, 10);
     if (typeof body.language === 'string') pref.language = body.language.slice(0, 40);
+    if (body.theme === 'light' || body.theme === 'dark') pref.theme = body.theme;
     if (body.numberFormat === 'INDIAN' || body.numberFormat === 'INTERNATIONAL') pref.numberFormat = body.numberFormat;
     if (['Beginner', 'Intermediate', 'Advanced'].includes(body.experienceLevel)) pref.experienceLevel = body.experienceLevel;
     if (['Simple', 'Balanced', 'Detailed'].includes(body.explanationLevel)) pref.explanationLevel = body.explanationLevel;
@@ -683,12 +740,13 @@ export function createApp(options: CreateAppOptions = {}) {
 
   app.get('/api/v1/dashboard/summary', requireAuth, (req, res) => {
     const userId = req.auth!.uid;
-    const userTransactions = db.transactions.filter(t => t.ownerId === userId);
+    const allUserTransactions = db.transactions.filter(t => t.ownerId === userId);
+    const activeTransactions = allUserTransactions.filter(t => !isDoubleCountExcluded(t));
     const userBudgets = db.budgets.filter(b => b.ownerId === userId);
     const userHoldings = db.holdings.filter(h => h.ownerId === userId);
 
     const totalAllocated = userBudgets.reduce((s, b) => s + b.allocatedAmount, 0);
-    const budgetMetrics = calculateBudgetMetrics(userTransactions, totalAllocated);
+    const budgetMetrics = calculateBudgetMetrics(activeTransactions, totalAllocated);
 
     let portfolioValue = 0;
     let investedAmount = 0;
@@ -711,16 +769,18 @@ export function createApp(options: CreateAppOptions = {}) {
           portfolioValue: Math.round(portfolioValue * 100) / 100,
           investedAmount: Math.round(investedAmount * 100) / 100,
           unrealizedGain: Math.round((portfolioValue - investedAmount) * 100) / 100,
-          transactionCount: userTransactions.length,
+          transactionCount: allUserTransactions.length,
+          needsReviewCount: allUserTransactions.filter(t => t.inboxStatus === 'NEEDS_REVIEW').length,
+          excludedTransfersCount: allUserTransactions.filter(t => isDoubleCountExcluded(t)).length,
         },
-        recentTransactions: userTransactions.slice(0, 6),
+        recentTransactions: allUserTransactions.slice(0, 6),
       },
     });
   });
 
   app.get('/api/v1/dashboard/cash-flow', requireAuth, (req, res) => {
     const userId = req.auth!.uid;
-    const txs = db.transactions.filter(t => t.ownerId === userId);
+    const txs = db.transactions.filter(t => t.ownerId === userId && !isDoubleCountExcluded(t));
     const budgets = db.budgets.filter(b => b.ownerId === userId);
     const totalAllocated = budgets.reduce((s, b) => s + b.allocatedAmount, 0);
     const metrics = calculateBudgetMetrics(txs, totalAllocated);
@@ -749,7 +809,9 @@ export function createApp(options: CreateAppOptions = {}) {
 
   app.get('/api/v1/dashboard/spending', requireAuth, (req, res) => {
     const userId = req.auth!.uid;
-    const expenses = db.transactions.filter(t => t.ownerId === userId && t.type === 'EXPENSE');
+    const expenses = db.transactions.filter(
+      t => t.ownerId === userId && t.type === 'EXPENSE' && !isDoubleCountExcluded(t)
+    );
     const totalSpent = expenses.reduce((s, t) => s + t.amount, 0);
     const byCat = new Map<string, number>();
     for (const tx of expenses) {
@@ -920,6 +982,63 @@ export function createApp(options: CreateAppOptions = {}) {
     });
   });
 
+  app.patch('/api/v1/transactions/:id/inbox-action', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const tx = db.transactions.find(t => t.id === req.params.id);
+    if (!tx) return res.status(404).json({ success: false, error: { message: 'Transaction not found' } });
+    if (tx.ownerId !== userId) return res.status(403).json({ success: false, error: { message: 'Forbidden' } });
+
+    const { action, category, splitItems } = req.body || {};
+    if (action === 'CONFIRM') {
+      tx.inboxStatus = 'CATEGORIZED';
+      if (typeof category === 'string' && category.trim()) tx.category = category.trim().slice(0, 60);
+      tx.confidence = 100;
+      tx.suggestionReason = 'Confirmed by user in Money Inbox.';
+    } else if (action === 'MARK_TRANSFER') {
+      tx.isInternalTransfer = true;
+      tx.inboxStatus = 'CATEGORIZED';
+      tx.category = 'Transfer';
+      tx.suggestionReason = 'Marked as internal transfer by user (excluded from net expense/income double-counting).';
+    } else if (action === 'MARK_CARD_PAYMENT') {
+      tx.isCreditCardSettlement = true;
+      tx.inboxStatus = 'CATEGORIZED';
+      tx.category = 'Credit Card Payment';
+      tx.suggestionReason = 'Marked as credit card bill settlement by user (excluded from double-counting).';
+    } else if (action === 'MARK_REFUND') {
+      tx.isRefund = true;
+      tx.inboxStatus = 'CATEGORIZED';
+      tx.category = 'Refund';
+      tx.suggestionReason = 'Marked as refund / reversal by user.';
+    } else if (action === 'IGNORE') {
+      tx.inboxStatus = 'IGNORED';
+      tx.suggestionReason = 'Ignored by user in Money Inbox.';
+    } else if (action === 'SPLIT' && Array.isArray(splitItems) && splitItems.length > 1) {
+      const normalized = splitItems
+        .map((s: any) => ({
+          category: String(s?.category || 'Other').slice(0, 60),
+          amount: Math.round((Number(s?.amount) || 0) * 100) / 100,
+          notes: s?.notes ? String(s.notes).slice(0, 120) : undefined,
+        }))
+        .filter((s: { amount: number }) => s.amount > 0);
+      const sum = normalized.reduce((s: number, item: { amount: number }) => s + item.amount, 0);
+      if (normalized.length < 2 || Math.abs(sum - tx.amount) > 1) {
+        return res.status(400).json({
+          success: false,
+          error: { message: `Split amounts (₹${sum}) must equal original transaction amount (₹${tx.amount}).` },
+        });
+      }
+      tx.splitItems = normalized;
+      tx.category = normalized[0].category;
+      tx.inboxStatus = 'CATEGORIZED';
+      tx.suggestionReason = `Split into ${normalized.length} categories by user.`;
+    } else {
+      return res.status(400).json({ success: false, error: { message: 'Unsupported inbox action.' } });
+    }
+
+    saveStore();
+    res.json({ success: true, data: tx });
+  });
+
   app.post('/api/v1/transactions/parse-sms', requireAuth, (req, res) => {
     const { text } = req.body || {};
     if (!text || typeof text !== 'string') {
@@ -927,8 +1046,19 @@ export function createApp(options: CreateAppOptions = {}) {
     }
     try {
       const parsed = parseBankSMS(text);
-      const flagged = flagDuplicateCandidates([parsed], db.transactions.filter(t => t.ownerId === req.auth!.uid))[0];
-      res.json({ success: true, data: { parsed: flagged } });
+      const existing = db.transactions.filter(t => t.ownerId === req.auth!.uid);
+      const flagged = flagDuplicateCandidates([parsed], existing)[0];
+      const classification = classifyInboxTransaction(flagged, existing);
+      res.json({
+        success: true,
+        data: {
+          parsed: {
+            ...flagged,
+            ...classification,
+            inboxStatus: flagged.isDuplicate ? 'DUPLICATE' : classification.inboxStatus,
+          },
+        },
+      });
     } catch (err) {
       res.status(400).json({
         success: false,
@@ -990,7 +1120,21 @@ export function createApp(options: CreateAppOptions = {}) {
       }
 
       const existing = db.transactions.filter(t => t.ownerId === userId);
-      const staged = flagDuplicateCandidates(candidates, existing);
+      const staged = flagDuplicateCandidates(candidates, existing).map(c => {
+        const cls = classifyInboxTransaction(c, existing);
+        return {
+          ...c,
+          category: cls.category,
+          inboxStatus: c.isDuplicate ? ('DUPLICATE' as const) : cls.inboxStatus,
+          confidence: cls.confidence,
+          suggestionReason: c.isDuplicate
+            ? 'Possible duplicate of an existing transaction on the same date & amount.'
+            : cls.suggestionReason,
+          isInternalTransfer: cls.isInternalTransfer,
+          isCreditCardSettlement: cls.isCreditCardSettlement,
+          isRefund: cls.isRefund,
+        };
+      });
       const duplicateCount = staged.filter(c => c.isDuplicate).length;
 
       res.json({
@@ -1052,6 +1196,7 @@ export function createApp(options: CreateAppOptions = {}) {
         continue;
       }
 
+      const cls = classifyInboxTransaction(flagged, existing);
       const newTx: Transaction = {
         id: `tx-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         ownerId: userId,
@@ -1060,12 +1205,18 @@ export function createApp(options: CreateAppOptions = {}) {
         amount: Math.round(flagged.amount * 100) / 100,
         currency: 'INR',
         type: flagged.type,
-        category: flagged.category.slice(0, 60),
+        category: String(raw.category || cls.category).slice(0, 60),
         account: flagged.account.slice(0, 100),
         transactionDate: flagged.transactionDate,
         referenceId: flagged.referenceId,
         source: flagged.source,
         importJobId: jobId,
+        inboxStatus: flagged.isDuplicate ? 'DUPLICATE' : (raw.inboxStatus || cls.inboxStatus),
+        suggestionReason: raw.suggestionReason || cls.suggestionReason,
+        confidence: raw.confidence || cls.confidence,
+        isInternalTransfer: Boolean(raw.isInternalTransfer ?? cls.isInternalTransfer),
+        isCreditCardSettlement: Boolean(raw.isCreditCardSettlement ?? cls.isCreditCardSettlement),
+        isRefund: Boolean(raw.isRefund ?? cls.isRefund),
         createdAt: new Date().toISOString(),
       };
       created.push(newTx);
@@ -1683,6 +1834,7 @@ export function createApp(options: CreateAppOptions = {}) {
     const start = Date.now();
     try {
       const output = await runFraudAnalyzer(userId, text.trim(), String(sourceType || 'SMS'));
+      const deterministicSignals = inspectFraudSignals(text.trim());
       const analysisResult: FraudAnalysis = {
         id: `fa-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         ownerId: userId,
@@ -1694,7 +1846,7 @@ export function createApp(options: CreateAppOptions = {}) {
         riskLevel: output.riskLevel,
         summary: output.summary,
         suspiciousKeywords: output.suspiciousKeywords,
-        findings: output.findings,
+        findings: Array.from(new Set([...deterministicSignals.deterministicEvidence, ...output.findings])).slice(0, 12),
         recommendedActions: output.recommendedActions,
         modelUsed: GEMINI_MODEL,
         createdAt: new Date().toISOString(),
@@ -1711,7 +1863,7 @@ export function createApp(options: CreateAppOptions = {}) {
         createdAt: new Date().toISOString(),
       });
       saveStore();
-      res.json({ success: true, data: analysisResult });
+      res.json({ success: true, data: { ...analysisResult, urlInspection: deterministicSignals.urls } });
     } catch (err) {
       const status = err instanceof AIServiceError ? err.statusCode : 500;
       const code = err instanceof AIServiceError ? err.code : 'AI_PROVIDER_ERROR';
@@ -2120,6 +2272,784 @@ export function createApp(options: CreateAppOptions = {}) {
     res.json({ success: true });
   });
 
+  // ----------------- FINSIGHT 2.0 INTELLIGENCE MODULES ----------------- //
+
+  // 1) Financial Health Summary, Snapshots, Manual Assets/Liabilities & PDF/JSON Reports
+  function computeHealthBundleForUser(uid: string) {
+    const txs = db.transactions.filter(t => t.ownerId === uid);
+    const holdings = db.holdings.filter(h => h.ownerId === uid);
+    const creditCards = db.creditCards.filter(c => c.ownerId === uid);
+    const goals = db.moneyGoals.filter(g => g.ownerId === uid);
+    const manualItems = db.manualAssetsLiabilities.filter(m => m.ownerId === uid);
+    const bp = db.businessProfiles.find(b => b.ownerId === uid);
+    const summary = computeFinancialHealthSummary({
+      transactions: txs,
+      holdings,
+      creditCards,
+      goals,
+      manualItems,
+      openingCashBalance: bp?.openingCashBalance || 0,
+    });
+    return { summary, manualItems };
+  }
+
+  app.get('/api/v1/financial-health/summary', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const { summary, manualItems } = computeHealthBundleForUser(userId);
+    res.json({ success: true, data: { ...summary, manualItems } });
+  });
+
+  app.get('/api/v1/financial-health/history', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    res.json({
+      success: true,
+      data: db.financialHealthSnapshots.filter(s => s.ownerId === userId),
+    });
+  });
+
+  app.post('/api/v1/financial-health/snapshot', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const { summary } = computeHealthBundleForUser(userId);
+    const snap: FinancialHealthSnapshot = {
+      id: `fhs-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      ownerId: userId,
+      period: new Date().toISOString().slice(0, 7),
+      ...summary,
+      supportingDataReferences: [
+        `${db.transactions.filter(t => t.ownerId === userId).length} transactions`,
+        `${db.holdings.filter(h => h.ownerId === userId).length} holdings`,
+        `${db.creditCards.filter(c => c.ownerId === userId).length} credit cards`,
+        `${db.moneyGoals.filter(g => g.ownerId === userId).length} goals`,
+      ],
+      calculatedAt: new Date().toISOString(),
+    };
+    db.financialHealthSnapshots.unshift(snap);
+    saveStore();
+    res.status(201).json({ success: true, data: snap, message: 'Financial health snapshot saved' });
+  });
+
+  app.get('/api/v1/financial-health/report', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const { summary } = computeHealthBundleForUser(userId);
+    const profile = ensureUserProfile(req.auth!);
+    res.json({
+      success: true,
+      data: {
+        generatedAt: new Date().toISOString(),
+        user: { fullName: profile.fullName, email: profile.email, currency: profile.currency },
+        ...summary,
+      },
+    });
+  });
+
+  app.get('/api/v1/financial-health/report/pdf', requireAuth, async (req, res) => {
+    const userId = req.auth!.uid;
+    const { summary } = computeHealthBundleForUser(userId);
+    const profile = ensureUserProfile(req.auth!);
+    const pdfBuf = await generateHealthReportPdfBuffer({
+      userName: profile.fullName,
+      userEmail: profile.email,
+      generatedAt: new Date().toISOString(),
+      summary,
+    });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="FinSight-Health-Report-${new Date().toISOString().slice(0, 10)}.pdf"`);
+    res.send(pdfBuf);
+  });
+
+  app.post('/api/v1/financial-health/assets-liabilities', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const { name, kind, category, amount, included, notes } = req.body || {};
+    const numAmt = Number(amount);
+    if (!name || !['ASSET', 'LIABILITY'].includes(String(kind)) || !Number.isFinite(numAmt) || numAmt < 0) {
+      return res.status(400).json({ success: false, error: { message: 'Valid name, kind (ASSET/LIABILITY), and non-negative amount required.' } });
+    }
+    const item: ManualAssetLiability = {
+      id: `mal-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      ownerId: userId,
+      name: String(name).trim().slice(0, 100),
+      kind: kind === 'LIABILITY' ? 'LIABILITY' : 'ASSET',
+      category: String(category || (kind === 'LIABILITY' ? 'Loan' : 'Cash Reserve')).slice(0, 60),
+      amount: Math.round(numAmt * 100) / 100,
+      included: included !== false,
+      notes: typeof notes === 'string' ? notes.slice(0, 200) : undefined,
+      createdAt: new Date().toISOString(),
+    };
+    db.manualAssetsLiabilities.unshift(item);
+    saveStore();
+    res.status(201).json({ success: true, data: item });
+  });
+
+  app.delete('/api/v1/financial-health/assets-liabilities/:id', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const idx = db.manualAssetsLiabilities.findIndex(m => m.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ success: false, error: { message: 'Record not found' } });
+    if (db.manualAssetsLiabilities[idx].ownerId !== userId) return res.status(403).json({ success: false, error: { message: 'Forbidden' } });
+    db.manualAssetsLiabilities.splice(idx, 1);
+    saveStore();
+    res.json({ success: true });
+  });
+
+  // 2) Financial Goals
+  app.get('/api/v1/goals', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const list = db.moneyGoals
+      .filter(g => g.ownerId === userId)
+      .map(g => ({ ...g, projection: computeGoalProjection(g) }));
+    res.json({ success: true, data: list });
+  });
+
+  app.post('/api/v1/goals', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const { title, category, targetAmount, currentAmount, targetDate, monthlyContribution, priority } = req.body || {};
+    const target = Number(targetAmount);
+    const current = Math.max(0, Number(currentAmount) || 0);
+    const monthly = Math.max(0, Number(monthlyContribution) || 0);
+    if (!title || !Number.isFinite(target) || target <= 0) {
+      return res.status(400).json({ success: false, error: { message: 'Valid goal title and positive targetAmount required.' } });
+    }
+    const goal: MoneyGoal = {
+      id: `goal-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      ownerId: userId,
+      title: String(title).trim().slice(0, 100),
+      category: ([
+        'Emergency Fund',
+        'Education',
+        'Travel',
+        'Vehicle',
+        'Home',
+        'Family',
+        'Retirement',
+        'Custom Goal',
+      ].includes(String(category))
+        ? category
+        : 'Custom Goal') as MoneyGoal['category'],
+      targetAmount: Math.round(target * 100) / 100,
+      currentAmount: Math.round(current * 100) / 100,
+      targetDate: String(targetDate || new Date(Date.now() + 365 * 86400000).toISOString().split('T')[0]),
+      monthlyContribution: Math.round(monthly * 100) / 100,
+      priority: ['HIGH', 'MEDIUM', 'LOW'].includes(String(priority)) ? priority : 'MEDIUM',
+      status: current >= target ? 'COMPLETED' : 'ACTIVE',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    db.moneyGoals.unshift(goal);
+    saveStore();
+    res.status(201).json({ success: true, data: { ...goal, projection: computeGoalProjection(goal) } });
+  });
+
+  app.get('/api/v1/goals/:id', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const g = db.moneyGoals.find(item => item.id === req.params.id);
+    if (!g) return res.status(404).json({ success: false, error: { message: 'Goal not found' } });
+    if (g.ownerId !== userId) return res.status(403).json({ success: false, error: { message: 'Forbidden' } });
+    res.json({ success: true, data: { ...g, projection: computeGoalProjection(g) } });
+  });
+
+  app.put('/api/v1/goals/:id', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const g = db.moneyGoals.find(item => item.id === req.params.id);
+    if (!g) return res.status(404).json({ success: false, error: { message: 'Goal not found' } });
+    if (g.ownerId !== userId) return res.status(403).json({ success: false, error: { message: 'Forbidden' } });
+
+    const { title, targetAmount, currentAmount, targetDate, monthlyContribution, priority, status } = req.body || {};
+    if (typeof title === 'string' && title.trim()) g.title = title.trim().slice(0, 100);
+    if (targetAmount !== undefined && Number.isFinite(Number(targetAmount)) && Number(targetAmount) > 0) g.targetAmount = Number(targetAmount);
+    if (currentAmount !== undefined && Number.isFinite(Number(currentAmount)) && Number(currentAmount) >= 0) g.currentAmount = Number(currentAmount);
+    if (typeof targetDate === 'string' && targetDate.trim()) g.targetDate = targetDate.trim();
+    if (monthlyContribution !== undefined && Number.isFinite(Number(monthlyContribution)) && Number(monthlyContribution) >= 0) g.monthlyContribution = Number(monthlyContribution);
+    if (['HIGH', 'MEDIUM', 'LOW'].includes(String(priority))) g.priority = priority;
+    if (['ACTIVE', 'COMPLETED', 'PAUSED'].includes(String(status))) g.status = status;
+    else if (g.currentAmount >= g.targetAmount) g.status = 'COMPLETED';
+    g.updatedAt = new Date().toISOString();
+    saveStore();
+    res.json({ success: true, data: { ...g, projection: computeGoalProjection(g) } });
+  });
+
+  app.delete('/api/v1/goals/:id', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const idx = db.moneyGoals.findIndex(item => item.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ success: false, error: { message: 'Goal not found' } });
+    if (db.moneyGoals[idx].ownerId !== userId) return res.status(403).json({ success: false, error: { message: 'Forbidden' } });
+    db.moneyGoals.splice(idx, 1);
+    saveStore();
+    res.json({ success: true });
+  });
+
+  // 3) Money Calendar & Cash-Flow Radar
+  function collectUserRadarEvents(uid: string): MoneyCalendarEvent[] {
+    const manualEvents = db.moneyCalendarEvents.filter(e => e.ownerId === uid);
+    const derived: MoneyCalendarEvent[] = [...manualEvents];
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth();
+
+    // Synthesize upcoming credit card dues if user has cards
+    for (const card of db.creditCards.filter(c => c.ownerId === uid && c.currentBalance > 0)) {
+      const dueDay = Math.min(28, Math.max(1, card.dueDate || 15));
+      let due = new Date(y, m, dueDay);
+      if (due.getTime() < now.getTime() - 86400000) due = new Date(y, m + 1, dueDay);
+      derived.push({
+        id: `derived-cc-${card.id}`,
+        ownerId: uid,
+        title: `${card.nickname} (*${card.lastFourDigits}) Card Bill`,
+        eventType: 'CREDIT_CARD',
+        dueDate: due.toISOString().split('T')[0],
+        amount: card.currentBalance,
+        direction: 'OUTFLOW',
+        relatedResourceId: card.id,
+        recurrence: 'MONTHLY',
+        reminderPreference: card.reminderPreference,
+        status: 'UPCOMING',
+        createdAt: card.createdAt,
+      });
+    }
+
+    // Synthesize confirmed recurring payments
+    for (const rec of db.recurringPayments.filter(r => r.ownerId === uid && r.status === 'CONFIRMED')) {
+      derived.push({
+        id: `derived-rec-${rec.id}`,
+        ownerId: uid,
+        title: `${rec.merchant} (${rec.frequency.toLowerCase()})`,
+        eventType: 'SUBSCRIPTION',
+        dueDate: rec.nextEstimatedDate,
+        amount: rec.estimatedAmount,
+        direction: 'OUTFLOW',
+        relatedResourceId: rec.id,
+        recurrence: rec.frequency === 'WEEKLY' ? 'MONTHLY' : rec.frequency,
+        reminderPreference: '3_DAYS_BEFORE',
+        status: 'UPCOMING',
+        createdAt: rec.createdAt,
+      });
+    }
+
+    return derived.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  }
+
+  app.get('/api/v1/calendar/events', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    res.json({ success: true, data: collectUserRadarEvents(userId) });
+  });
+
+  app.post('/api/v1/calendar/events', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const { title, eventType, dueDate, amount, direction, recurrence, reminderPreference } = req.body || {};
+    const amt = Number(amount);
+    if (!title || !dueDate || !Number.isFinite(amt) || amt <= 0) {
+      return res.status(400).json({ success: false, error: { message: 'Title, dueDate, and positive amount required.' } });
+    }
+    const ev: MoneyCalendarEvent = {
+      id: `cal-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      ownerId: userId,
+      title: String(title).trim().slice(0, 120),
+      eventType: (eventType || 'BILL') as MoneyCalendarEvent['eventType'],
+      dueDate: String(dueDate),
+      amount: Math.round(amt * 100) / 100,
+      direction: direction === 'INFLOW' ? 'INFLOW' : 'OUTFLOW',
+      recurrence: ['ONCE', 'MONTHLY', 'QUARTERLY', 'YEARLY'].includes(String(recurrence)) ? recurrence : 'ONCE',
+      reminderPreference: ['NONE', '3_DAYS_BEFORE', '7_DAYS_BEFORE'].includes(String(reminderPreference))
+        ? reminderPreference
+        : '3_DAYS_BEFORE',
+      status: 'UPCOMING',
+      createdAt: new Date().toISOString(),
+    };
+    db.moneyCalendarEvents.push(ev);
+    saveStore();
+    res.status(201).json({ success: true, data: ev });
+  });
+
+  app.put('/api/v1/calendar/events/:id', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const ev = db.moneyCalendarEvents.find(e => e.id === req.params.id);
+    if (!ev) return res.status(404).json({ success: false, error: { message: 'Calendar event not found' } });
+    if (ev.ownerId !== userId) return res.status(403).json({ success: false, error: { message: 'Forbidden' } });
+    const { title, dueDate, amount, status, direction } = req.body || {};
+    if (typeof title === 'string' && title.trim()) ev.title = title.trim().slice(0, 120);
+    if (typeof dueDate === 'string' && dueDate.trim()) ev.dueDate = dueDate.trim();
+    if (amount !== undefined && Number.isFinite(Number(amount)) && Number(amount) > 0) ev.amount = Number(amount);
+    if (['UPCOMING', 'PAID', 'OVERDUE'].includes(String(status))) ev.status = status;
+    if (direction === 'INFLOW' || direction === 'OUTFLOW') ev.direction = direction;
+    saveStore();
+    res.json({ success: true, data: ev });
+  });
+
+  app.delete('/api/v1/calendar/events/:id', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const idx = db.moneyCalendarEvents.findIndex(e => e.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ success: false, error: { message: 'Event not found' } });
+    if (db.moneyCalendarEvents[idx].ownerId !== userId) return res.status(403).json({ success: false, error: { message: 'Forbidden' } });
+    db.moneyCalendarEvents.splice(idx, 1);
+    saveStore();
+    res.json({ success: true });
+  });
+
+  app.get('/api/v1/calendar/radar', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const horizonRaw = Number(req.query.horizon);
+    const horizonDays: 7 | 30 | 90 = horizonRaw === 7 ? 7 : horizonRaw === 90 ? 90 : 30;
+    const whatIfExtraExpense = Math.max(0, Number(req.query.whatIfExpense) || 0);
+    const activeTxs = db.transactions.filter(t => t.ownerId === userId && !isDoubleCountExcluded(t));
+    const txNet = activeTxs.reduce((s, t) => s + (t.type === 'INCOME' ? t.amount : -t.amount), 0);
+    const manualCash = db.manualAssetsLiabilities
+      .filter(m => m.ownerId === userId && m.included && m.kind === 'ASSET' && /cash|bank|savings/i.test(m.category + m.name))
+      .reduce((s, m) => s + m.amount, 0);
+    const openingOverride = req.query.openingBalance !== undefined && Number.isFinite(Number(req.query.openingBalance))
+      ? Number(req.query.openingBalance)
+      : Math.max(0, txNet + manualCash);
+
+    const radar = buildCashFlowRadar({
+      openingBalance: openingOverride,
+      events: collectUserRadarEvents(userId),
+      horizonDays,
+      whatIfExtraExpense,
+    });
+    res.json({ success: true, data: radar });
+  });
+
+  // 4) Credit Card & Debt Command Center (strictly rejects sensitive card PAN, CVV, PIN, OTP)
+  function containsForbiddenSensitiveCardData(body: Record<string, unknown>): string | null {
+    const sensitiveKeys = ['cardNumber', 'fullCardNumber', 'pan', 'cvv', 'cvc', 'pin', 'otp', 'password'];
+    for (const k of sensitiveKeys) {
+      if (body[k] !== undefined && String(body[k]).trim() !== '') {
+        return `Sensitive credential "${k}" must never be submitted or stored. Only non-sensitive lastFourDigits are accepted.`;
+      }
+    }
+    const last4 = String(body.lastFourDigits || '').trim();
+    if (last4 && !/^\d{4}$/.test(last4)) {
+      return 'lastFourDigits must be exactly 4 digits.';
+    }
+    return null;
+  }
+
+  app.get('/api/v1/credit-cards', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const cards = db.creditCards.filter(c => c.ownerId === userId);
+    const summary = computeCreditCardSummary(cards);
+    res.json({ success: true, data: { cards, summary } });
+  });
+
+  app.post('/api/v1/credit-cards', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const body = (req.body || {}) as Record<string, unknown>;
+    const errMsg = containsForbiddenSensitiveCardData(body);
+    if (errMsg) return res.status(400).json({ success: false, error: { message: errMsg } });
+
+    const limit = Number(body.creditLimit);
+    const balance = Math.max(0, Number(body.currentBalance) || 0);
+    const minDue = Math.max(0, Number(body.minimumDue) || Math.round(balance * 0.05));
+    if (!body.nickname || !body.issuer || !body.lastFourDigits || !Number.isFinite(limit) || limit <= 0) {
+      return res.status(400).json({ success: false, error: { message: 'nickname, issuer, lastFourDigits (4 digits), and positive creditLimit required.' } });
+    }
+
+    const card: CreditCard = {
+      id: `cc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      ownerId: userId,
+      nickname: String(body.nickname).trim().slice(0, 60),
+      issuer: String(body.issuer).trim().slice(0, 60),
+      lastFourDigits: String(body.lastFourDigits).trim(),
+      creditLimit: Math.round(limit * 100) / 100,
+      currentBalance: Math.round(balance * 100) / 100,
+      minimumDue: Math.round(minDue * 100) / 100,
+      statementDate: Math.min(28, Math.max(1, Number(body.statementDate) || 1)),
+      dueDate: Math.min(28, Math.max(1, Number(body.dueDate) || 18)),
+      annualInterestRate: Math.max(0, Math.min(60, Number(body.annualInterestRate) || 36)),
+      reminderPreference: ['3_DAYS_BEFORE', '7_DAYS_BEFORE', 'NONE'].includes(String(body.reminderPreference))
+        ? (body.reminderPreference as CreditCard['reminderPreference'])
+        : '3_DAYS_BEFORE',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    db.creditCards.unshift(card);
+    saveStore();
+    res.status(201).json({ success: true, data: card });
+  });
+
+  app.put('/api/v1/credit-cards/:id', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const card = db.creditCards.find(c => c.id === req.params.id);
+    if (!card) return res.status(404).json({ success: false, error: { message: 'Credit card not found' } });
+    if (card.ownerId !== userId) return res.status(403).json({ success: false, error: { message: 'Forbidden' } });
+    const body = (req.body || {}) as Record<string, unknown>;
+    const errMsg = containsForbiddenSensitiveCardData(body);
+    if (errMsg) return res.status(400).json({ success: false, error: { message: errMsg } });
+
+    if (typeof body.nickname === 'string' && body.nickname.trim()) card.nickname = body.nickname.trim().slice(0, 60);
+    if (body.creditLimit !== undefined && Number(body.creditLimit) > 0) card.creditLimit = Number(body.creditLimit);
+    if (body.currentBalance !== undefined && Number(body.currentBalance) >= 0) card.currentBalance = Number(body.currentBalance);
+    if (body.minimumDue !== undefined && Number(body.minimumDue) >= 0) card.minimumDue = Number(body.minimumDue);
+    if (body.annualInterestRate !== undefined && Number(body.annualInterestRate) >= 0) card.annualInterestRate = Number(body.annualInterestRate);
+    card.updatedAt = new Date().toISOString();
+    saveStore();
+    res.json({ success: true, data: card });
+  });
+
+  app.delete('/api/v1/credit-cards/:id', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const idx = db.creditCards.findIndex(c => c.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ success: false, error: { message: 'Credit card not found' } });
+    if (db.creditCards[idx].ownerId !== userId) return res.status(403).json({ success: false, error: { message: 'Forbidden' } });
+    db.creditCards.splice(idx, 1);
+    db.creditCardStatements = db.creditCardStatements.filter(s => s.creditCardId !== req.params.id);
+    saveStore();
+    res.json({ success: true });
+  });
+
+  app.get('/api/v1/credit-cards/:id/statements', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const card = db.creditCards.find(c => c.id === req.params.id);
+    if (!card) return res.status(404).json({ success: false, error: { message: 'Credit card not found' } });
+    if (card.ownerId !== userId) return res.status(403).json({ success: false, error: { message: 'Forbidden' } });
+    const statements = db.creditCardStatements.filter(s => s.creditCardId === card.id && s.ownerId === userId);
+    const sim = simulateCreditCardPayment({
+      balance: card.currentBalance,
+      annualInterestRate: card.annualInterestRate || 36,
+      extraMonthlyPayment: Math.max(0, Number(req.query.extraMonthly) || 2000),
+    });
+    res.json({ success: true, data: { card, statements, paymentSimulation: sim } });
+  });
+
+  app.post('/api/v1/credit-cards/:id/statements', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const card = db.creditCards.find(c => c.id === req.params.id);
+    if (!card) return res.status(404).json({ success: false, error: { message: 'Credit card not found' } });
+    if (card.ownerId !== userId) return res.status(403).json({ success: false, error: { message: 'Forbidden' } });
+
+    const { statementPeriod, totalDue, minimumDue, dueDate, fees, interestCharges, emiComponents, transactions } = req.body || {};
+    const total = Math.max(0, Number(totalDue) || 0);
+    const stmt: CreditCardStatement = {
+      id: `ccs-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      ownerId: userId,
+      creditCardId: card.id,
+      statementPeriod: String(statementPeriod || new Date().toISOString().slice(0, 7)),
+      totalDue: total,
+      minimumDue: Math.max(0, Number(minimumDue) || Math.round(total * 0.05)),
+      dueDate: String(dueDate || new Date().toISOString().split('T')[0]),
+      transactions: Array.isArray(transactions) ? transactions.slice(0, 100) : [],
+      fees: Math.max(0, Number(fees) || 0),
+      interestCharges: Math.max(0, Number(interestCharges) || 0),
+      emiComponents: Math.max(0, Number(emiComponents) || 0),
+      verificationStatus: 'NEEDS_REVIEW',
+      createdAt: new Date().toISOString(),
+    };
+    db.creditCardStatements.unshift(stmt);
+    card.currentBalance = total;
+    card.minimumDue = stmt.minimumDue;
+    card.updatedAt = new Date().toISOString();
+    saveStore();
+    res.status(201).json({ success: true, data: stmt });
+  });
+
+  app.put('/api/v1/credit-cards/statements/:statementId/verify', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const stmt = db.creditCardStatements.find(s => s.id === req.params.statementId);
+    if (!stmt) return res.status(404).json({ success: false, error: { message: 'Statement not found' } });
+    if (stmt.ownerId !== userId) return res.status(403).json({ success: false, error: { message: 'Forbidden' } });
+    stmt.verificationStatus = 'VERIFIED';
+    saveStore();
+    res.json({ success: true, data: stmt });
+  });
+
+  app.post('/api/v1/credit-cards/payoff-compare', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const monthlyBudget = Math.max(0, Number(req.body?.monthlyBudget) || 15000);
+    const debts = [
+      ...db.creditCards
+        .filter(c => c.ownerId === userId && c.currentBalance > 0)
+        .map(c => ({
+          id: c.id,
+          name: `${c.nickname} (*${c.lastFourDigits})`,
+          balance: c.currentBalance,
+          annualInterestRate: c.annualInterestRate || 36,
+          minimumPayment: Math.max(500, c.minimumDue),
+        })),
+      ...db.emiPlans
+        .filter(e => e.ownerId === userId && e.loanAmount > 0)
+        .map(e => ({
+          id: e.id,
+          name: e.planName,
+          balance: e.loanAmount,
+          annualInterestRate: e.annualInterestRate,
+          minimumPayment: e.monthlyEMI,
+        })),
+    ];
+    const avalanche = computeDebtPayoffSchedule(debts, monthlyBudget, 'AVALANCHE');
+    const snowball = computeDebtPayoffSchedule(debts, monthlyBudget, 'SNOWBALL');
+    res.json({ success: true, data: { debtsCount: debts.length, monthlyBudget, avalanche, snowball } });
+  });
+
+  // 5) Recurring Payments & Subscription Intelligence
+  app.get('/api/v1/recurring-payments', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    res.json({ success: true, data: db.recurringPayments.filter(r => r.ownerId === userId) });
+  });
+
+  app.post('/api/v1/recurring-payments/detect', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const userTxs = db.transactions.filter(t => t.ownerId === userId);
+    const existing = db.recurringPayments.filter(r => r.ownerId === userId);
+    const newlyDetected = detectRecurringPayments(userTxs, existing, userId);
+    for (const item of newlyDetected) {
+      db.recurringPayments.unshift(item);
+    }
+    if (newlyDetected.length > 0) saveStore();
+    res.json({
+      success: true,
+      data: db.recurringPayments.filter(r => r.ownerId === userId),
+      newlyDetectedCount: newlyDetected.length,
+    });
+  });
+
+  app.put('/api/v1/recurring-payments/:id', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const rec = db.recurringPayments.find(r => r.id === req.params.id);
+    if (!rec) return res.status(404).json({ success: false, error: { message: 'Recurring payment not found' } });
+    if (rec.ownerId !== userId) return res.status(403).json({ success: false, error: { message: 'Forbidden' } });
+    const { status, estimatedAmount, nextEstimatedDate } = req.body || {};
+    if (['DETECTED', 'CONFIRMED', 'CANCELLED', 'IGNORED'].includes(String(status))) {
+      rec.status = status;
+      if (status === 'CONFIRMED') rec.userConfirmed = true;
+    }
+    if (estimatedAmount !== undefined && Number(estimatedAmount) > 0) rec.estimatedAmount = Number(estimatedAmount);
+    if (typeof nextEstimatedDate === 'string' && nextEstimatedDate.trim()) rec.nextEstimatedDate = nextEstimatedDate.trim();
+    rec.updatedAt = new Date().toISOString();
+    saveStore();
+    res.json({ success: true, data: rec });
+  });
+
+  app.delete('/api/v1/recurring-payments/:id', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const idx = db.recurringPayments.findIndex(r => r.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ success: false, error: { message: 'Recurring payment not found' } });
+    if (db.recurringPayments[idx].ownerId !== userId) return res.status(403).json({ success: false, error: { message: 'Forbidden' } });
+    db.recurringPayments.splice(idx, 1);
+    saveStore();
+    res.json({ success: true });
+  });
+
+  // 6) Portfolio Risk Analytics & Investment Decision Journal
+  app.get('/api/v1/investments/risk', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const holdings = db.holdings.filter(h => h.ownerId === userId);
+    res.json({ success: true, data: computePortfolioRiskAnalytics(holdings) });
+  });
+
+  app.get('/api/v1/investments/journal', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    res.json({ success: true, data: db.investmentJournal.filter(j => j.ownerId === userId) });
+  });
+
+  app.post('/api/v1/investments/journal', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const { investmentName, reasonForResearch, expectedHoldingPeriod, risksConsidered, userNotes, reviewDate } = req.body || {};
+    if (!investmentName || !reasonForResearch) {
+      return res.status(400).json({ success: false, error: { message: 'investmentName and reasonForResearch are required.' } });
+    }
+    const entry: InvestmentJournalEntry = {
+      id: `ij-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      ownerId: userId,
+      investmentName: String(investmentName).trim().slice(0, 100),
+      reasonForResearch: String(reasonForResearch).trim().slice(0, 400),
+      expectedHoldingPeriod: String(expectedHoldingPeriod || '3–5 Years').slice(0, 60),
+      risksConsidered: String(risksConsidered || '').slice(0, 300),
+      userNotes: String(userNotes || '').slice(0, 400),
+      reviewDate: String(reviewDate || new Date(Date.now() + 90 * 86400000).toISOString().split('T')[0]),
+      createdAt: new Date().toISOString(),
+    };
+    db.investmentJournal.unshift(entry);
+    saveStore();
+    res.status(201).json({ success: true, data: entry });
+  });
+
+  app.delete('/api/v1/investments/journal/:id', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const idx = db.investmentJournal.findIndex(j => j.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ success: false, error: { message: 'Journal entry not found' } });
+    if (db.investmentJournal[idx].ownerId !== userId) return res.status(403).json({ success: false, error: { message: 'Forbidden' } });
+    db.investmentJournal.splice(idx, 1);
+    saveStore();
+    res.json({ success: true });
+  });
+
+  // 7) Tax Readiness Checklist
+  app.get('/api/v1/tax/readiness', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const fy = req.query.fy === '2024-25' ? '2024-25' : '2025-26';
+    let items = db.taxReadinessItems.filter(i => i.ownerId === userId && i.financialYear === fy);
+    if (items.length === 0) {
+      const defaults: Array<{ title: string; category: TaxReadinessItem['category'] }> = [
+        { title: 'Form 16 (Employer TDS Certificate)', category: 'INCOME' },
+        { title: 'Salary Slips & Bonus Breakdown', category: 'INCOME' },
+        { title: 'Interest Certificates (Savings / FD)', category: 'INCOME' },
+        { title: 'Section 80C / PPF / ELSS Investment Proofs', category: 'DEDUCTION' },
+        { title: 'Section 80D Health Insurance Receipts', category: 'DEDUCTION' },
+        { title: 'Compare Old vs New Regime & Confirm Choice', category: 'REGIME' },
+      ];
+      items = defaults.map((d, idx) => ({
+        id: `tr-${userId}-${fy}-${idx}`,
+        ownerId: userId,
+        financialYear: fy,
+        title: d.title,
+        category: d.category,
+        status: 'NOT_UPLOADED',
+        updatedAt: new Date().toISOString(),
+      }));
+      db.taxReadinessItems.push(...items);
+      saveStore();
+    }
+    res.json({ success: true, data: items });
+  });
+
+  app.put('/api/v1/tax/readiness/:id', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const item = db.taxReadinessItems.find(i => i.id === req.params.id);
+    if (!item) return res.status(404).json({ success: false, error: { message: 'Checklist item not found' } });
+    if (item.ownerId !== userId) return res.status(403).json({ success: false, error: { message: 'Forbidden' } });
+    const status = req.body?.status;
+    if (!['NOT_UPLOADED', 'UPLOADED', 'NEEDS_REVIEW', 'VERIFIED_BY_USER'].includes(String(status))) {
+      return res.status(400).json({ success: false, error: { message: 'Invalid status' } });
+    }
+    item.status = status;
+    item.updatedAt = new Date().toISOString();
+    saveStore();
+    res.json({ success: true, data: item });
+  });
+
+  // 8) Business Receivables Aging, Follow-Ups (Copy-Only Drafts) & Reconciliation Assistant
+  app.get('/api/v1/business/receivables', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const invoices = db.invoices.filter(i => i.ownerId === userId);
+    const aging = computeReceivablesAging(invoices);
+    const followUps = db.paymentFollowUps.filter(f => f.ownerId === userId);
+    res.json({ success: true, data: { ...aging, invoices, followUps } });
+  });
+
+  app.post('/api/v1/business/receivables/follow-up', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const { invoiceId, reminderType } = req.body || {};
+    const inv = db.invoices.find(i => i.id === invoiceId);
+    if (!inv) return res.status(404).json({ success: false, error: { message: 'Invoice not found' } });
+    if (inv.ownerId !== userId) return res.status(403).json({ success: false, error: { message: 'Forbidden' } });
+
+    const rType: PaymentFollowUp['reminderType'] = ['FRIENDLY', 'DUE_SOON', 'OVERDUE', 'FINAL'].includes(String(reminderType))
+      ? reminderType
+      : 'FRIENDLY';
+    const bp = ensureBusinessProfile(userId);
+    const dueStr = inv.balanceDue.toLocaleString('en-IN');
+    const templates: Record<PaymentFollowUp['reminderType'], string> = {
+      FRIENDLY: `Hi ${inv.clientName} team,\n\nSharing a gentle note regarding Invoice ${inv.invoiceNumber} for ₹${dueStr} (Due Date: ${inv.dueDate}). Please let us know if you need any supporting documents or GST confirmation.\n\nWarm regards,\n${bp.businessName}`,
+      DUE_SOON: `Hi ${inv.clientName} team,\n\nReminder that Invoice ${inv.invoiceNumber} (₹${dueStr}) is due on ${inv.dueDate}. Kindly schedule settlement as per terms.\n\nRegards,\n${bp.businessName}`,
+      OVERDUE: `Hi ${inv.clientName} accounts team,\n\nInvoice ${inv.invoiceNumber} for ₹${dueStr} is past its due date (${inv.dueDate}). Could you please share an updated payment remittance date?\n\nRegards,\n${bp.businessName}`,
+      FINAL: `Dear ${inv.clientName} team,\n\nFinal follow-up on overdue Invoice ${inv.invoiceNumber} for ₹${dueStr} (originally due ${inv.dueDate}). Requesting priority clearance or immediate confirmation.\n\nRegards,\n${bp.businessName}`,
+    };
+
+    const followUp: PaymentFollowUp = {
+      id: `pf-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      ownerId: userId,
+      invoiceId: inv.id,
+      clientId: inv.clientId,
+      clientName: inv.clientName,
+      invoiceNumber: inv.invoiceNumber,
+      amountDue: inv.balanceDue,
+      reminderType: rType,
+      generatedMessage: templates[rType],
+      status: 'DRAFT_COPY_ONLY',
+      createdAt: new Date().toISOString(),
+    };
+    db.paymentFollowUps.unshift(followUp);
+    saveStore();
+    res.status(201).json({ success: true, data: followUp });
+  });
+
+  app.patch('/api/v1/business/receivables/follow-up/:id', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const item = db.paymentFollowUps.find(f => f.id === req.params.id);
+    if (!item) return res.status(404).json({ success: false, error: { message: 'Follow-up draft not found' } });
+    if (item.ownerId !== userId) return res.status(403).json({ success: false, error: { message: 'Forbidden' } });
+    if (req.body?.status === 'MARKED_SENT_EXTERNALLY') {
+      item.status = 'MARKED_SENT_EXTERNALLY';
+      item.sentAt = new Date().toISOString();
+    }
+    saveStore();
+    res.json({ success: true, data: item });
+  });
+
+  app.get('/api/v1/business/reconciliation', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    res.json({ success: true, data: db.businessReconciliationRuns.filter(r => r.ownerId === userId) });
+  });
+
+  app.post('/api/v1/business/reconciliation/run', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const bp = ensureBusinessProfile(userId);
+    const invoices = db.invoices.filter(i => i.ownerId === userId);
+    const transactions = db.transactions.filter(t => t.ownerId === userId);
+    const expenses = db.businessExpenses.filter(e => e.ownerId === userId);
+    const result = runDeterministicReconciliation({ invoices, transactions, expenses });
+
+    const run: BusinessReconciliationRun = {
+      id: `recrun-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      ownerId: userId,
+      businessId: bp.id,
+      sourceType: ['BANK_VS_INVOICES', 'EXPENSES_VS_BANK', 'FULL_LEDGER'].includes(String(req.body?.sourceType))
+        ? req.body.sourceType
+        : 'FULL_LEDGER',
+      period: String(req.body?.period || new Date().toISOString().slice(0, 7)),
+      ...result,
+      status: 'PENDING_REVIEW',
+      createdAt: new Date().toISOString(),
+    };
+    db.businessReconciliationRuns.unshift(run);
+    saveStore();
+    res.status(201).json({ success: true, data: run });
+  });
+
+  app.post('/api/v1/business/reconciliation/:id/confirm', requireAuth, (req, res) => {
+    const userId = req.auth!.uid;
+    const run = db.businessReconciliationRuns.find(r => r.id === req.params.id);
+    if (!run) return res.status(404).json({ success: false, error: { message: 'Reconciliation run not found' } });
+    if (run.ownerId !== userId) return res.status(403).json({ success: false, error: { message: 'Forbidden' } });
+    run.status = 'CONFIRMED';
+    run.matchedRecords.forEach(m => {
+      m.verifiedByUser = true;
+    });
+    saveStore();
+    res.json({ success: true, data: run });
+  });
+
+  // 9) AI Monthly Money Review Brief
+  app.post('/api/v1/ai/monthly-review', requireAuth, async (req, res) => {
+    const userId = req.auth!.uid;
+    if (!db.systemSettings.aiEnabled) {
+      return res.status(503).json({ success: false, error: { code: 'AI_DISABLED', message: 'AI Assistant is currently disabled.' } });
+    }
+    const summaryContext = buildUserFinancialSummary(userId);
+    const start = Date.now();
+    try {
+      const { reply, model } = await runAiResponder(
+        userId,
+        'Generate my Monthly Money Review with: 1) Key financial summary from my actual records, 2) Upcoming bill/goal priorities, 3) Any concentration or tax readiness watch-outs, and 4) Three realistic next steps I can take this month.',
+        'Monthly Money Review & Health Summary',
+        summaryContext
+      );
+      db.aiUsageLogs.unshift({
+        id: `aiu-${Date.now()}`,
+        ownerId: userId,
+        endpoint: '/api/v1/ai/monthly-review',
+        model,
+        status: 'SUCCESS',
+        latencyMs: Date.now() - start,
+        createdAt: new Date().toISOString(),
+      });
+      saveStore();
+      res.json({ success: true, data: { review: reply, model, generatedAt: new Date().toISOString() } });
+    } catch (err) {
+      const status = err instanceof AIServiceError ? err.statusCode : 500;
+      const code = err instanceof AIServiceError ? err.code : 'AI_PROVIDER_ERROR';
+      const errMsg = err instanceof Error ? err.message : 'Unable to generate Monthly Money Review.';
+      res.status(status).json({ success: false, message: errMsg, error: { code, message: errMsg } });
+    }
+  });
+
   // ----------------- AI ASSISTANT & GROUNDED MODULE INSIGHTS ----------------- //
 
   app.get('/api/v1/ai/conversations', requireAuth, (req, res) => {
@@ -2290,6 +3220,17 @@ export function createApp(options: CreateAppOptions = {}) {
         invoices: db.invoices.filter(i => i.ownerId === userId),
         businessExpenses: db.businessExpenses.filter(be => be.ownerId === userId),
         emiPlans: db.emiPlans.filter(p => p.ownerId === userId),
+        manualAssetsLiabilities: db.manualAssetsLiabilities.filter(m => m.ownerId === userId),
+        moneyGoals: db.moneyGoals.filter(g => g.ownerId === userId),
+        moneyCalendarEvents: db.moneyCalendarEvents.filter(e => e.ownerId === userId),
+        creditCards: db.creditCards.filter(c => c.ownerId === userId),
+        creditCardStatements: db.creditCardStatements.filter(s => s.ownerId === userId),
+        recurringPayments: db.recurringPayments.filter(r => r.ownerId === userId),
+        financialHealthSnapshots: db.financialHealthSnapshots.filter(s => s.ownerId === userId),
+        businessReconciliationRuns: db.businessReconciliationRuns.filter(r => r.ownerId === userId),
+        paymentFollowUps: db.paymentFollowUps.filter(f => f.ownerId === userId),
+        investmentJournal: db.investmentJournal.filter(j => j.ownerId === userId),
+        taxReadinessItems: db.taxReadinessItems.filter(i => i.ownerId === userId),
       },
     });
   });
@@ -2324,6 +3265,17 @@ export function createApp(options: CreateAppOptions = {}) {
     db.emiPlans = db.emiPlans.filter(e => e.ownerId !== userId);
     db.aiConversations = db.aiConversations.filter(a => a.ownerId !== userId);
     db.notifications = db.notifications.filter(n => n.ownerId !== userId);
+    db.manualAssetsLiabilities = db.manualAssetsLiabilities.filter(m => m.ownerId !== userId);
+    db.moneyGoals = db.moneyGoals.filter(g => g.ownerId !== userId);
+    db.moneyCalendarEvents = db.moneyCalendarEvents.filter(e => e.ownerId !== userId);
+    db.creditCards = db.creditCards.filter(c => c.ownerId !== userId);
+    db.creditCardStatements = db.creditCardStatements.filter(s => s.ownerId !== userId);
+    db.recurringPayments = db.recurringPayments.filter(r => r.ownerId !== userId);
+    db.financialHealthSnapshots = db.financialHealthSnapshots.filter(s => s.ownerId !== userId);
+    db.businessReconciliationRuns = db.businessReconciliationRuns.filter(r => r.ownerId !== userId);
+    db.paymentFollowUps = db.paymentFollowUps.filter(f => f.ownerId !== userId);
+    db.investmentJournal = db.investmentJournal.filter(j => j.ownerId !== userId);
+    db.taxReadinessItems = db.taxReadinessItems.filter(i => i.ownerId !== userId);
     recordAuditLog(userId, req.auth!.email, 'USER_RECORDS_PURGED', 'USER_DATA', userId, 'SUCCESS');
     saveStore();
 

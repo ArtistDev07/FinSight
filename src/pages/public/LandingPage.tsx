@@ -1,397 +1,418 @@
 import React from 'react';
 import {
-  ShieldCheck,
-  TrendingUp,
-  Wallet,
-  ReceiptText,
-  ShieldAlert,
-  Building2,
   ArrowRight,
-  PieChart,
   CheckCircle2,
+  ShieldCheck,
   Lock,
+  Calculator,
+  Sparkles,
+  Calendar,
+  CreditCard,
+  Activity,
+  Repeat,
+  Target,
+  Clock,
 } from 'lucide-react';
 import { PublicHeader } from '../../components/layout/PublicHeader';
 import { PublicFooter } from '../../components/layout/PublicFooter';
+import { FeatureIllustration, HeroConnectedFinanceArtwork } from '../../components/brand/FinSightArtwork';
 
 interface LandingPageProps {
   onNavigate: (path: string) => void;
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
+  const pillars = [
+    {
+      kind: 'budgeting' as const,
+      title: 'Smart Budgeting & Money Inbox',
+      summary: 'Turn CSV, XLSX, PDF statements, and UPI alerts into clean monthly budgets with automatic transfer exclusion.',
+      path: '/app/budgeting',
+    },
+    {
+      kind: 'investing' as const,
+      title: 'Portfolio Guide & Risk Drift',
+      summary: 'Inspect equity vs index concentration, 10% market shock stress tests, and keep an Investment Decision Journal.',
+      path: '/app/investments',
+    },
+    {
+      kind: 'markets' as const,
+      title: 'NSE Markets & Paper Trading',
+      summary: 'Study historical NSE price candles, run deterministic strategy backtests, and practice with virtual capital.',
+      path: '/app/markets',
+    },
+    {
+      kind: 'tax' as const,
+      title: 'Tax Center & Readiness',
+      summary: 'Compare CBDT Old vs New Regimes, organize 80C/80D/24(b) proofs, and track ITR filing readiness.',
+      path: '/app/tax',
+    },
+    {
+      kind: 'fraud' as const,
+      title: 'Scam & Fraud Shield',
+      summary: 'Inspect suspicious SMS, WhatsApp messages, URLs, lookalike bank domains, and UPI collect requests.',
+      path: '/app/fraud',
+    },
+    {
+      kind: 'business' as const,
+      title: 'Small Business, GST & Receivables',
+      summary: 'Generate GST PDF invoices, monitor aging buckets (1–90+ days), and reconcile bank credits with ledgers.',
+      path: '/app/business',
+    },
+  ];
+
+  const differentiators = [
+    {
+      icon: Activity,
+      title: 'Financial Health Index',
+      desc: 'Net worth breakdown, emergency reserve runway in months, transparent 5-dimension formula, and downloadable PDF snapshots.',
+      path: '/app/financial-health',
+    },
+    {
+      icon: Calendar,
+      title: 'Cash-Flow Radar & Calendar',
+      desc: 'See upcoming salary, rent, EMI, and card bills on a 7/30/90-day horizon with shortfall date warnings and what-if testing.',
+      path: '/app/money-calendar',
+    },
+    {
+      icon: CreditCard,
+      title: 'Credit Card & Debt Command',
+      desc: 'Track card utilization, compare Minimum Due vs Full Payment interest cost, and run Avalanche vs Snowball payoff plans.',
+      path: '/app/credit-cards',
+    },
+    {
+      icon: Repeat,
+      title: 'Subscription & Recurring Intelligence',
+      desc: 'Spot recurring OTT, cloud, and utility charges from transaction patterns and estimate monthly and annual run rates.',
+      path: '/app/recurring-payments',
+    },
+    {
+      icon: Target,
+      title: 'Goal-Based Financial Planning',
+      desc: 'Calculate exact monthly savings needed for an Emergency Fund, Home, or Education target with what-if timeline shifts.',
+      path: '/app/goals',
+    },
+    {
+      icon: Clock,
+      title: 'Receivables & Ledger Reconciliation',
+      desc: 'Identify overdue client invoices, draft polite follow-up messages, and match bank credits against business books.',
+      path: '/app/business/receivables',
+    },
+  ];
+
   return (
-    <div className="min-h-screen bg-[#0B1C19] text-[#F5F7F5] flex flex-col">
+    <div className="min-h-screen bg-[var(--fs-bg)] text-[var(--fs-text)] flex flex-col transition-colors">
       <PublicHeader currentPath="/" onNavigate={onNavigate} />
 
-      {/* Hero Section */}
-      <section className="relative overflow-hidden pt-16 pb-24 md:pt-24 md:pb-32 border-b border-[#28443C]">
-        <div className="mx-auto max-w-7xl px-6 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-          {/* Left Column */}
-          <div className="lg:col-span-7 space-y-6">
-            <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 bg-[#16352E] border border-[#28443C] text-xs font-semibold text-[#A8E6CE]">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#A8E6CE]" />
-              AI FOR FINANCE
-            </div>
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-[#F5F7F5] leading-[1.15]">
-              Make better money decisions with AI.
-            </h1>
-            <p className="text-base sm:text-lg text-[#A7C1B8] max-w-xl leading-relaxed">
-              Turn your financial data into clarity. Understand spending, investments, markets, taxes, and business finances with one intelligent platform.
-            </p>
-            <div className="flex flex-wrap items-center gap-4 pt-2">
-              <button
-                onClick={() => onNavigate('/auth/sign-up')}
-                className="flex items-center gap-2 rounded-xl bg-[#A8E6CE] px-6 py-3.5 text-sm font-bold text-[#0B1C19] hover:bg-[#72C8B0] transition-colors shadow-lg"
-              >
-                Get Started
-                <ArrowRight className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => onNavigate('/features')}
-                className="rounded-xl border border-[#28443C] bg-[#102722] px-6 py-3.5 text-sm font-semibold text-[#F5F7F5] hover:bg-[#16352E] hover:border-[#72C8B0] transition-colors"
-              >
-                Explore Features
-              </button>
-            </div>
-            <div className="pt-4 text-xs font-medium text-[#718D83]">
-              One workspace. Six powerful financial tools. Designed for India.
-            </div>
-          </div>
-
-          {/* Right Column: Hero Financial Preview Card */}
-          <div className="lg:col-span-5">
-            <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-6 shadow-2xl space-y-6">
-              <div className="flex items-center justify-between border-b border-[#28443C] pb-4">
-                <div>
-                  <div className="text-xs text-[#718D83] uppercase tracking-wider">Financial Health Index</div>
-                  <div className="text-2xl font-bold text-[#F5F7F5]">88 / 100 · Strong</div>
-                </div>
-                <div className="h-10 w-10 rounded-xl bg-[#16352E] border border-[#28443C] flex items-center justify-center text-[#55C99A]">
-                  <TrendingUp className="h-5 w-5" />
-                </div>
-              </div>
-
-              {/* Metrics grid */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-xl bg-[#0B1C19] border border-[#28443C] p-3.5">
-                  <div className="text-[11px] text-[#718D83]">Monthly Savings Rate</div>
-                  <div className="text-lg font-bold text-[#55C99A] tabular-nums">48.2%</div>
-                  <div className="text-[10px] text-[#718D83]">+5.4% from Feb</div>
-                </div>
-                <div className="rounded-xl bg-[#0B1C19] border border-[#28443C] p-3.5">
-                  <div className="text-[11px] text-[#718D83]">Tax Optimization</div>
-                  <div className="text-lg font-bold text-[#A8E6CE] tabular-nums">₹46,800</div>
-                  <div className="text-[10px] text-[#718D83]">Saved under Sec 80C</div>
-                </div>
-              </div>
-
-              {/* Sample Insight */}
-              <div className="rounded-xl bg-[#16352E]/70 border border-[#28443C] p-4 text-xs text-[#A7C1B8] space-y-1">
-                <div className="font-semibold text-[#F5F7F5] flex items-center gap-1.5">
-                  <ShieldCheck className="h-4 w-4 text-[#A8E6CE]" />
-                  FinSight AI Observation
-                </div>
-                <p className="text-[11px] text-[#A7C1B8]">
-                  Your recurring discretionary subscriptions are down 12% this month. Your emergency fund now covers 5.2 months of living expenses.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Section 3: Financial Intelligence */}
-      <section className="py-20 border-b border-[#28443C]">
-        <div className="mx-auto max-w-7xl px-6 space-y-12">
-          <div className="text-center max-w-2xl mx-auto space-y-3">
-            <h2 className="text-3xl font-bold tracking-tight text-[#F5F7F5]">
-              Your finances deserve more than spreadsheets.
-            </h2>
-            <p className="text-sm text-[#A7C1B8]">
-              Bring fragmented financial information together and understand the bigger picture.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-4">
-              <div className="h-10 w-10 rounded-xl bg-[#16352E] border border-[#28443C] flex items-center justify-center text-[#A8E6CE]">
-                <Wallet className="h-5 w-5" />
-              </div>
-              <h3 className="text-lg font-bold text-[#F5F7F5]">1. Understand Your Money</h3>
-              <p className="text-xs text-[#A7C1B8] leading-relaxed">
-                Connect UPI statements and bank alerts. Transform raw transaction rows into automated budgets, categorized living costs, and predictive cash flow.
+      <main className="flex-1">
+        {/* SECTION 1 — Hero */}
+        <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-10 pb-14 lg:pt-16 lg:pb-20">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
+            <div className="lg:col-span-6 space-y-6">
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--fs-accent)]">
+                Intelligence for every rupee
               </p>
-            </div>
-            <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-4">
-              <div className="h-10 w-10 rounded-xl bg-[#16352E] border border-[#28443C] flex items-center justify-center text-[#A8E6CE]">
-                <PieChart className="h-5 w-5" />
-              </div>
-              <h3 className="text-lg font-bold text-[#F5F7F5]">2. Learn Before You Invest</h3>
-              <p className="text-xs text-[#A7C1B8] leading-relaxed">
-                Master compounding, SIPs, Nifty index funds, and asset allocation with zero financial jargon. Backtest strategies on verified historical NSE datasets.
+              <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-[var(--fs-text)] leading-[1.08]">
+                Your financial life. Finally, in focus.
+              </h1>
+              <p className="text-base sm:text-lg text-[var(--fs-text-body)] leading-relaxed max-w-xl">
+                Track expenses, anticipate upcoming bills, compare Indian tax regimes, monitor credit card utilization, guard against UPI scams, and manage small-business GST ledgers from one calm, transparent workspace.
               </p>
-            </div>
-            <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-6 space-y-4">
-              <div className="h-10 w-10 rounded-xl bg-[#16352E] border border-[#28443C] flex items-center justify-center text-[#A8E6CE]">
-                <ShieldAlert className="h-5 w-5" />
+
+              <div className="flex flex-wrap items-center gap-3 pt-1">
+                <button
+                  onClick={() => onNavigate('/auth/sign-up')}
+                  className="fs-btn-primary px-6 py-3 text-sm inline-flex items-center gap-2"
+                >
+                  <span>Start Free Workspace</span>
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => onNavigate('/features')}
+                  className="fs-btn-secondary px-5 py-3 text-sm"
+                >
+                  Explore Platform
+                </button>
               </div>
-              <h3 className="text-lg font-bold text-[#F5F7F5]">3. Protect Your Decisions</h3>
-              <p className="text-xs text-[#A7C1B8] leading-relaxed">
-                Analyze suspicious SMS alerts, fake UPI collect links, and impersonation attempts with Gemini AI risk assessment before sharing credentials or clicking links.
-              </p>
+
+              <div className="pt-2 flex flex-wrap gap-x-5 gap-y-2 text-xs text-[var(--fs-text-muted)]">
+                <span className="flex items-center gap-1.5">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-[var(--fs-success)]" /> No bank passwords or UPI PINs requested
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-[var(--fs-success)]" /> Transparent formulas, zero mock data
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-[var(--fs-success)]" /> English &amp; हिन्दी support
+                </span>
+              </div>
+            </div>
+
+            <div className="lg:col-span-6">
+              <HeroConnectedFinanceArtwork />
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Section 4: Six Core Features Grid */}
-      <section className="py-20 border-b border-[#28443C] bg-[#0B1C19]/60">
-        <div className="mx-auto max-w-7xl px-6 space-y-12">
-          <div className="text-center max-w-2xl mx-auto space-y-3">
-            <h2 className="text-3xl font-bold tracking-tight text-[#F5F7F5]">
-              Everything you need to understand your finances.
-            </h2>
-            <p className="text-sm text-[#A7C1B8]">
-              Six intelligent tools. One connected financial workspace.
-            </p>
+        {/* SECTION 2 — Real Problems People Face */}
+        <section className="border-y border-[var(--fs-border)] bg-[var(--fs-surface)] py-16">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-10">
+            <div className="max-w-2xl space-y-2">
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--fs-accent)]">
+                Why existing tools fall short
+              </p>
+              <h2 className="text-2xl sm:text-3xl font-bold text-[var(--fs-text)]">
+                Most money apps show past charts. Real life requires forward clarity.
+              </h2>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {[
+                {
+                  label: '01 · Double Counting & Messy Statements',
+                  title: 'Bank transfers & card payments distort spending',
+                  body: 'Ordinary trackers count credit card bill payments as brand-new expenses. FinSight identifies internal transfers and card settlements cleanly in Money Inbox.',
+                },
+                {
+                  label: '02 · Mid-Month Cash-Flow Surprises',
+                  title: 'Bills arrive faster than static monthly averages',
+                  body: 'Knowing last month’s average does not prevent an unexpected EMI or insurance squeeze. Cash-Flow Radar projects exact upcoming obligations 7, 30, and 90 days ahead.',
+                },
+                {
+                  label: '03 · Fragmented Tax, Debt & Business Records',
+                  title: 'Spreadsheets break when you need one decision',
+                  body: 'From deciding Old vs New CBDT tax regimes to chasing overdue client invoices, FinSight keeps personal, investment, tax, and business context connected.',
+                },
+              ].map(card => (
+                <div key={card.label} className="fs-card p-6 space-y-2.5 bg-[var(--fs-bg)]">
+                  <div className="text-[11px] font-mono font-semibold text-[var(--fs-accent)]">{card.label}</div>
+                  <h3 className="text-base font-bold text-[var(--fs-text)]">{card.title}</h3>
+                  <p className="text-xs leading-relaxed text-[var(--fs-text-body)]">{card.body}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* SECTION 3 — Track -> Understand -> Predict -> Act */}
+        <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16">
+          <div className="rounded-2xl border border-[var(--fs-border)] bg-[var(--fs-surface)] p-6 sm:p-10">
+            <div className="max-w-2xl space-y-2 mb-8">
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--fs-accent)]">
+                Connected Financial Architecture
+              </p>
+              <h2 className="text-2xl sm:text-3xl font-bold text-[var(--fs-text)]">
+                Track Money → Understand Money → Predict Impact → Take Better Actions
+              </h2>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+              {[
+                { step: '01 · TRACK', heading: 'Organize statements cleanly', copy: 'Upload CSV, XLSX, or PDF statements, or paste bank SMS alerts with duplicate & transfer triage.' },
+                { step: '02 · UNDERSTAND', heading: 'Measure true financial health', copy: 'Compute net worth, savings rate, credit card utilization, and 5-dimension health scores with disclosed formulas.' },
+                { step: '03 · PREDICT', heading: 'Test decisions before spending', copy: 'Simulate card minimum vs extra payments, market 10% shocks, cash-flow shortfall dates, and Avalanche vs Snowball payoff.' },
+                { step: '04 · ACT', heading: 'Prioritize practical next steps', copy: 'Review tax filing readiness, draft overdue invoice reminders, inspect suspicious UPI links, and save snapshot reports.' },
+              ].map(item => (
+                <div key={item.step} className="p-5 rounded-xl border border-[var(--fs-border)] bg-[var(--fs-bg)] space-y-2">
+                  <div className="text-[11px] font-mono font-bold text-[var(--fs-accent)]">{item.step}</div>
+                  <h3 className="text-sm font-bold text-[var(--fs-text)]">{item.heading}</h3>
+                  <p className="text-xs text-[var(--fs-text-body)] leading-relaxed">{item.copy}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* SECTION 4 — Six Core Financial Pillars */}
+        <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-16 space-y-8">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+            <div className="space-y-2">
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--fs-accent)]">
+                Six Core Modules
+              </p>
+              <h2 className="text-2xl sm:text-3xl font-bold text-[var(--fs-text)]">
+                Built around Indian financial reality.
+              </h2>
+            </div>
+            <button
+              onClick={() => onNavigate('/features')}
+              className="text-xs font-semibold text-[var(--fs-brand)] dark:text-[#A8E6CE] hover:underline inline-flex items-center gap-1"
+            >
+              View all capabilities <ArrowRight className="h-3.5 w-3.5" />
+            </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Card 1 */}
-            <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-6 flex flex-col justify-between space-y-4">
-              <div className="space-y-3">
-                <div className="h-10 w-10 rounded-xl bg-[#16352E] border border-[#28443C] flex items-center justify-center text-[#A8E6CE]">
-                  <Wallet className="h-5 w-5" />
+            {pillars.map(p => (
+              <div key={p.title} className="fs-card p-6 flex flex-col justify-between gap-5">
+                <div className="space-y-3">
+                  <FeatureIllustration kind={p.kind} />
+                  <h3 className="text-base font-bold text-[var(--fs-text)]">{p.title}</h3>
+                  <p className="text-xs text-[var(--fs-text-body)] leading-relaxed">{p.summary}</p>
                 </div>
-                <h3 className="text-lg font-bold text-[#F5F7F5]">Smart Budgeting</h3>
-                <p className="text-xs text-[#A7C1B8] leading-relaxed">
-                  Transform transactions and bank alerts into organized budgets and spending insights.
-                </p>
+                <button
+                  onClick={() => onNavigate(p.path)}
+                  className="text-xs font-semibold text-[var(--fs-accent)] hover:underline inline-flex items-center gap-1 self-start"
+                >
+                  Open Module <ArrowRight className="h-3.5 w-3.5" />
+                </button>
               </div>
-              <button
-                onClick={() => onNavigate('/app/budgeting')}
-                className="mt-4 flex items-center gap-1.5 text-xs font-semibold text-[#A8E6CE] hover:text-[#72C8B0] transition-colors"
-              >
-                Explore Budgeting <ArrowRight className="h-3.5 w-3.5" />
-              </button>
+            ))}
+          </div>
+        </section>
+
+        {/* SECTION 5 — Differentiating Intelligence Features */}
+        <section className="border-y border-[var(--fs-border)] bg-[var(--fs-surface)] py-16">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-8">
+            <div className="max-w-2xl space-y-2">
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--fs-accent)]">
+                FinSight 2.0 Intelligence Suite
+              </p>
+              <h2 className="text-2xl sm:text-3xl font-bold text-[var(--fs-text)]">
+                Practical tools beyond ordinary dashboards.
+              </h2>
             </div>
 
-            {/* Card 2 */}
-            <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-6 flex flex-col justify-between space-y-4">
-              <div className="space-y-3">
-                <div className="h-10 w-10 rounded-xl bg-[#16352E] border border-[#28443C] flex items-center justify-center text-[#A8E6CE]">
-                  <PieChart className="h-5 w-5" />
-                </div>
-                <h3 className="text-lg font-bold text-[#F5F7F5]">Investing & Portfolio Guide</h3>
-                <p className="text-xs text-[#A7C1B8] leading-relaxed">
-                  Understand SIPs, index funds, fixed deposits, diversification, and portfolio risk.
-                </p>
-              </div>
-              <button
-                onClick={() => onNavigate('/app/investments')}
-                className="mt-4 flex items-center gap-1.5 text-xs font-semibold text-[#A8E6CE] hover:text-[#72C8B0] transition-colors"
-              >
-                Explore Investing <ArrowRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
-
-            {/* Card 3 */}
-            <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-6 flex flex-col justify-between space-y-4">
-              <div className="space-y-3">
-                <div className="h-10 w-10 rounded-xl bg-[#16352E] border border-[#28443C] flex items-center justify-center text-[#A8E6CE]">
-                  <TrendingUp className="h-5 w-5" />
-                </div>
-                <h3 className="text-lg font-bold text-[#F5F7F5]">Trading & Market Insights</h3>
-                <p className="text-xs text-[#A7C1B8] leading-relaxed">
-                  Study historical market data, backtest strategies, and practice with paper trading.
-                </p>
-              </div>
-              <button
-                onClick={() => onNavigate('/app/markets')}
-                className="mt-4 flex items-center gap-1.5 text-xs font-semibold text-[#A8E6CE] hover:text-[#72C8B0] transition-colors"
-              >
-                Explore Markets <ArrowRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
-
-            {/* Card 4 */}
-            <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-6 flex flex-col justify-between space-y-4">
-              <div className="space-y-3">
-                <div className="h-10 w-10 rounded-xl bg-[#16352E] border border-[#28443C] flex items-center justify-center text-[#A8E6CE]">
-                  <ReceiptText className="h-5 w-5" />
-                </div>
-                <h3 className="text-lg font-bold text-[#F5F7F5]">Tax Helper</h3>
-                <p className="text-xs text-[#A7C1B8] leading-relaxed">
-                  Understand tax regimes, deductions, and indicative tax calculations.
-                </p>
-              </div>
-              <button
-                onClick={() => onNavigate('/app/tax')}
-                className="mt-4 flex items-center gap-1.5 text-xs font-semibold text-[#A8E6CE] hover:text-[#72C8B0] transition-colors"
-              >
-                Explore Tax Tools <ArrowRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
-
-            {/* Card 5 */}
-            <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-6 flex flex-col justify-between space-y-4">
-              <div className="space-y-3">
-                <div className="h-10 w-10 rounded-xl bg-[#16352E] border border-[#28443C] flex items-center justify-center text-[#A8E6CE]">
-                  <ShieldAlert className="h-5 w-5" />
-                </div>
-                <h3 className="text-lg font-bold text-[#F5F7F5]">Scam & Fraud Detector</h3>
-                <p className="text-xs text-[#A7C1B8] leading-relaxed">
-                  Identify suspicious messages, payment requests, and possible financial scams.
-                </p>
-              </div>
-              <button
-                onClick={() => onNavigate('/app/fraud')}
-                className="mt-4 flex items-center gap-1.5 text-xs font-semibold text-[#A8E6CE] hover:text-[#72C8B0] transition-colors"
-              >
-                Check for Scams <ArrowRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
-
-            {/* Card 6 */}
-            <div className="rounded-2xl border border-[#28443C] bg-[#102722] p-6 flex flex-col justify-between space-y-4">
-              <div className="space-y-3">
-                <div className="h-10 w-10 rounded-xl bg-[#16352E] border border-[#28443C] flex items-center justify-center text-[#A8E6CE]">
-                  <Building2 className="h-5 w-5" />
-                </div>
-                <h3 className="text-lg font-bold text-[#F5F7F5]">Small Business Finance</h3>
-                <p className="text-xs text-[#A7C1B8] leading-relaxed">
-                  Manage invoices, expenses, cash flow, and EMI planning.
-                </p>
-              </div>
-              <button
-                onClick={() => onNavigate('/app/business')}
-                className="mt-4 flex items-center gap-1.5 text-xs font-semibold text-[#A8E6CE] hover:text-[#72C8B0] transition-colors"
-              >
-                Explore Business Tools <ArrowRight className="h-3.5 w-3.5" />
-              </button>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {differentiators.map(item => {
+                const Icon = item.icon;
+                return (
+                  <div key={item.title} className="p-5 rounded-xl border border-[var(--fs-border)] bg-[var(--fs-bg)] space-y-3">
+                    <div className="h-9 w-9 rounded-lg bg-[var(--fs-surface-secondary)] border border-[var(--fs-border)] flex items-center justify-center text-[var(--fs-accent)]">
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <h3 className="text-sm font-bold text-[var(--fs-text)]">{item.title}</h3>
+                    <p className="text-xs text-[var(--fs-text-body)] leading-relaxed">{item.desc}</p>
+                    <button
+                      onClick={() => onNavigate(item.path)}
+                      className="text-xs font-semibold text-[var(--fs-brand)] dark:text-[#A8E6CE] hover:underline inline-flex items-center gap-1"
+                    >
+                      Explore <ArrowRight className="h-3 w-3" />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Section 5: How It Works */}
-      <section className="py-20 border-b border-[#28443C]">
-        <div className="mx-auto max-w-7xl px-6 space-y-12">
-          <div className="text-center max-w-2xl mx-auto space-y-3">
-            <h2 className="text-3xl font-bold tracking-tight text-[#F5F7F5]">
-              From financial data to informed decisions.
+        {/* SECTION 6 — AI Assistant Preview */}
+        <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+            <div className="lg:col-span-5 space-y-4">
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--fs-accent)]">
+                FinSight AI · Understand your money
+              </p>
+              <h2 className="text-2xl sm:text-3xl font-bold text-[var(--fs-text)]">
+                Explanations grounded in your actual numbers, never generic guesses.
+              </h2>
+              <p className="text-sm text-[var(--fs-text-body)] leading-relaxed">
+                Ask why your savings rate shifted, compare Old vs New Regime tax liabilities, or check if a suspicious payment link is impersonating an Indian bank. FinSight AI cites verified records separately from estimates.
+              </p>
+            </div>
+
+            <div className="lg:col-span-7">
+              <div className="fs-card p-6 space-y-4 bg-[var(--fs-surface)]">
+                <div className="flex items-center justify-between border-b border-[var(--fs-border)] pb-3">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-[var(--fs-accent)]" />
+                    <span className="text-xs font-bold text-[var(--fs-text)]">Illustrative Copilot Response</span>
+                  </div>
+                  <span className="text-[11px] font-mono text-[var(--fs-text-muted)]">Sample walkthrough</span>
+                </div>
+                <div className="p-3 rounded-lg bg-[var(--fs-brand)] text-white text-xs self-end max-w-md ml-auto">
+                  Can I afford a ₹45,000 laptop upgrade this month without hurting my upcoming card bill?
+                </div>
+                <div className="p-4 rounded-lg bg-[var(--fs-surface-secondary)] border border-[var(--fs-border)] text-xs text-[var(--fs-text)] space-y-2">
+                  <p className="font-semibold">What your records show (verified):</p>
+                  <p className="text-[var(--fs-text-body)]">
+                    Current monthly surplus is <span className="font-mono font-semibold">₹1,08,150</span> with upcoming rent (<span className="font-mono">₹32,000</span>) and card due (<span className="font-mono">₹18,400</span>) scheduled in the next 14 days.
+                  </p>
+                  <p className="font-semibold pt-1">Estimated impact &amp; next step:</p>
+                  <p className="text-[var(--fs-text-body)]">
+                    Paying ₹45,000 upfront leaves an estimated <span className="font-mono font-semibold">₹12,750</span> buffer for the remaining cycle. Testing it in Cash-Flow Radar confirms zero shortfall dates if groceries stay under budget.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* SECTION 7 — Security & Trust */}
+        <section className="border-t border-[var(--fs-border)] bg-[var(--fs-surface)] py-16">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-8">
+            <div className="max-w-2xl space-y-2">
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--fs-accent)]">
+                Trust &amp; Architectural Safeguards
+              </p>
+              <h2 className="text-2xl sm:text-3xl font-bold text-[var(--fs-text)]">
+                Designed to protect your privacy and prevent unauthorized actions.
+              </h2>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+              {[
+                {
+                  icon: ShieldCheck,
+                  title: 'Verified Owner Isolation',
+                  body: 'Every database record, document vault file, and report derives ownership strictly from verified Firebase Auth tokens.',
+                },
+                {
+                  icon: Lock,
+                  title: 'Zero Sensitive Credentials',
+                  body: 'FinSight never collects full credit card numbers, CVVs, UPI PINs, OTPs, or internet banking passwords.',
+                },
+                {
+                  icon: Calculator,
+                  title: 'Deterministic Financial Math',
+                  body: 'Income tax slabs, GST invoices, EMI schedules, and payoff projections run in audited TypeScript—never LLM guesswork.',
+                },
+                {
+                  icon: Sparkles,
+                  title: 'User-Confirmed Actions Only',
+                  body: 'FinSight never initiates payments, transfers, trades, or reminders automatically. Every record stays in your control.',
+                },
+              ].map(card => {
+                const Icon = card.icon;
+                return (
+                  <div key={card.title} className="p-5 rounded-xl border border-[var(--fs-border)] bg-[var(--fs-bg)] space-y-2.5">
+                    <Icon className="h-5 w-5 text-[var(--fs-accent)]" />
+                    <h3 className="text-sm font-bold text-[var(--fs-text)]">{card.title}</h3>
+                    <p className="text-xs text-[var(--fs-text-body)] leading-relaxed">{card.body}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        {/* SECTION 8 — Closing Conversion Band */}
+        <section className="bg-[#123D32] text-white py-16">
+          <div className="mx-auto max-w-4xl px-4 sm:px-6 text-center space-y-5">
+            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
+              Bring clarity to every rupee you earn, save, invest, and protect.
             </h2>
-            <p className="text-sm text-[#A7C1B8]">
-              A simple three-step process to financial clarity.
+            <p className="text-sm sm:text-base text-[#D3E7DD] max-w-2xl mx-auto">
+              Create your private FinSight workspace in under a minute and explore all financial intelligence tools at your own pace.
             </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="space-y-3">
-              <div className="text-3xl font-extrabold text-[#A8E6CE]">01.</div>
-              <h3 className="text-base font-bold text-[#F5F7F5]">Connect or Upload Your Data</h3>
-              <p className="text-xs text-[#A7C1B8] leading-relaxed">
-                Add bank alerts via SMS paste, upload statement CSVs, or enter holdings manually without sharing sensitive banking passwords.
-              </p>
-            </div>
-            <div className="space-y-3">
-              <div className="text-3xl font-extrabold text-[#A8E6CE]">02.</div>
-              <h3 className="text-base font-bold text-[#F5F7F5]">Let AI Understand the Information</h3>
-              <p className="text-xs text-[#A7C1B8] leading-relaxed">
-                FinSight's deterministic finance engine and Gemini model classify transactions, calculate taxes, and evaluate risk objectively.
-              </p>
-            </div>
-            <div className="space-y-3">
-              <div className="text-3xl font-extrabold text-[#A8E6CE]">03.</div>
-              <h3 className="text-base font-bold text-[#F5F7F5]">Explore Insights and Take Action</h3>
-              <p className="text-xs text-[#A7C1B8] leading-relaxed">
-                Take command of monthly budgets, test simulated trading strategies, optimize tax deductions, and issue GST compliant invoices.
-              </p>
+            <div className="pt-2 flex flex-wrap justify-center gap-3">
+              <button
+                onClick={() => onNavigate('/auth/sign-up')}
+                className="rounded-lg bg-[#BCE8D3] text-[#123D32] px-6 py-3 text-sm font-bold hover:bg-white transition-colors inline-flex items-center gap-2"
+              >
+                <span>Create Free Account</span>
+                <ArrowRight className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => onNavigate('/security')}
+                className="rounded-lg border border-white/25 px-5 py-3 text-sm font-medium text-white hover:bg-white/10 transition-colors"
+              >
+                Read Security Architecture
+              </button>
             </div>
           </div>
-
-          <div className="text-center pt-4">
-            <button
-              onClick={() => onNavigate('/auth/sign-up')}
-              className="rounded-xl bg-[#A8E6CE] px-6 py-3.5 text-xs font-bold text-[#0B1C19] hover:bg-[#72C8B0] transition-colors"
-            >
-              Start Exploring
-            </button>
-          </div>
-        </div>
-      </section>
-
-      {/* Section 6: Trust & Security */}
-      <section className="py-20 border-b border-[#28443C] bg-[#102722]/40">
-        <div className="mx-auto max-w-7xl px-6 space-y-12">
-          <div className="text-center max-w-2xl mx-auto space-y-3">
-            <h2 className="text-3xl font-bold tracking-tight text-[#F5F7F5]">
-              Your financial information deserves care.
-            </h2>
-            <p className="text-sm text-[#A7C1B8]">
-              Security and transparency built into every layer.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="rounded-xl border border-[#28443C] bg-[#102722] p-5 space-y-2">
-              <Lock className="h-5 w-5 text-[#A8E6CE]" />
-              <h4 className="text-sm font-bold text-[#F5F7F5]">Secure Data Handling</h4>
-              <p className="text-xs text-[#A7C1B8]">Owner-isolated database security rules prevent unauthorized multi-tenant record access.</p>
-            </div>
-            <div className="rounded-xl border border-[#28443C] bg-[#102722] p-5 space-y-2">
-              <ShieldCheck className="h-5 w-5 text-[#A8E6CE]" />
-              <h4 className="text-sm font-bold text-[#F5F7F5]">Private Financial Records</h4>
-              <p className="text-xs text-[#A7C1B8]">No banking passwords, card PINs, or UPI PINs are ever requested or stored.</p>
-            </div>
-            <div className="rounded-xl border border-[#28443C] bg-[#102722] p-5 space-y-2">
-              <CheckCircle2 className="h-5 w-5 text-[#A8E6CE]" />
-              <h4 className="text-sm font-bold text-[#F5F7F5]">Transparent Explanations</h4>
-              <p className="text-xs text-[#A7C1B8]">Calculations are reproducible with visible formulas for old/new tax regimes and loans.</p>
-            </div>
-            <div className="rounded-xl border border-[#28443C] bg-[#102722] p-5 space-y-2">
-              <TrendingUp className="h-5 w-5 text-[#A8E6CE]" />
-              <h4 className="text-sm font-bold text-[#F5F7F5]">No Real-Money Trading</h4>
-              <p className="text-xs text-[#A7C1B8]">All trading features exclusively use historical NSE data or virtual paper simulation.</p>
-            </div>
-          </div>
-
-          <div className="text-center">
-            <button
-              onClick={() => onNavigate('/security')}
-              className="text-xs font-semibold text-[#A8E6CE] hover:underline"
-            >
-              Explore Security Architecture →
-            </button>
-          </div>
-        </div>
-      </section>
-
-      {/* Section 7: Final CTA */}
-      <section className="py-24 text-center">
-        <div className="mx-auto max-w-3xl px-6 space-y-6">
-          <h2 className="text-3xl sm:text-4xl font-extrabold text-[#F5F7F5]">
-            Take control of your financial picture.
-          </h2>
-          <p className="text-sm sm:text-base text-[#A7C1B8]">
-            Start with one financial question. Discover a clearer way to understand your money.
-          </p>
-          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <button
-              onClick={() => onNavigate('/auth/sign-up')}
-              className="w-full sm:w-auto rounded-xl bg-[#A8E6CE] px-8 py-3.5 text-xs font-bold text-[#0B1C19] hover:bg-[#72C8B0] transition-colors shadow-lg"
-            >
-              Create Your Account
-            </button>
-            <button
-              onClick={() => onNavigate('/auth/sign-in')}
-              className="text-xs font-medium text-[#A7C1B8] hover:text-[#F5F7F5]"
-            >
-              Already have an account? Sign In
-            </button>
-          </div>
-        </div>
-      </section>
+        </section>
+      </main>
 
       <PublicFooter onNavigate={onNavigate} />
     </div>

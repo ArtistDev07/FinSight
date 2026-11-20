@@ -36,6 +36,17 @@ import type {
   AIUsageLog,
   AppNotification,
   AuditLog,
+  ManualAssetLiability,
+  MoneyGoal,
+  MoneyCalendarEvent,
+  CreditCard,
+  CreditCardStatement,
+  RecurringPayment,
+  FinancialHealthSnapshot,
+  BusinessReconciliationRun,
+  PaymentFollowUp,
+  InvestmentJournalEntry,
+  TaxReadinessItem,
 } from '../types';
 import { generateHistoricalMarketCatalog } from './marketData';
 
@@ -70,6 +81,17 @@ export interface FinSightStore {
   aiUsageLogs: AIUsageLog[];
   notifications: AppNotification[];
   auditLogs: AuditLog[];
+  manualAssetsLiabilities: ManualAssetLiability[];
+  moneyGoals: MoneyGoal[];
+  moneyCalendarEvents: MoneyCalendarEvent[];
+  creditCards: CreditCard[];
+  creditCardStatements: CreditCardStatement[];
+  recurringPayments: RecurringPayment[];
+  financialHealthSnapshots: FinancialHealthSnapshot[];
+  businessReconciliationRuns: BusinessReconciliationRun[];
+  paymentFollowUps: PaymentFollowUp[];
+  investmentJournal: InvestmentJournalEntry[];
+  taxReadinessItems: TaxReadinessItem[];
   systemSettings: {
     aiEnabled: boolean;
     maintenanceMode: boolean;
@@ -265,6 +287,17 @@ export function createInitialStore(): FinSightStore {
         createdAt: '2026-03-11T08:20:00.000Z',
       },
     ],
+    manualAssetsLiabilities: [],
+    moneyGoals: [],
+    moneyCalendarEvents: [],
+    creditCards: [],
+    creditCardStatements: [],
+    recurringPayments: [],
+    financialHealthSnapshots: [],
+    businessReconciliationRuns: [],
+    paymentFollowUps: [],
+    investmentJournal: [],
+    taxReadinessItems: [],
     systemSettings: {
       aiEnabled: true,
       maintenanceMode: false,
